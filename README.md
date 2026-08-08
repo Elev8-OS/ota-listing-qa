@@ -88,7 +88,7 @@ ohne Code-Änderung, nur per Railway-Variable:
   `DEFAULT_SYSTEM_PROMPT` in `lib/aiRewrite.js`). Hier den eigenen,
   ausführlicheren Prompt eintragen, sobald er feststeht.
 - `AI_REWRITE_MODEL` — Claude-Modellname, falls nicht das Standardmodell
-  verwendet werden soll (Default: `claude-3-5-sonnet-latest`).
+  verwendet werden soll (Default: `claude-sonnet-5`).
 
 ## Rollen
 
