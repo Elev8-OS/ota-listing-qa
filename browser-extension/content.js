@@ -1,14 +1,66 @@
+// Läuft auf jeder Airbnb-Host-Editor-Seite (echte, eingeloggte Session der
+// Person). Liest:
+//   1) auf der Fotorundgang-Seite die Felder, die öffentlich nie sichtbar
+//      sind (Fotorundgang-Zimmerliste, Sleeping arrangements) per Text-
+//      Heuristik aus document.body.innerText.
+//   2) auf JEDER Editor-Unterseite (Title, Description-Unterpanels wie
+//      "Listing description"/"Your property", ...) generisch alle
+//      <textarea>/<input type=text>-Felder mit HTML-id ("alle Texte im
+//      Inserat"). Diese generische Erfassung ist bewusst nicht auf
+//      bestimmte Felder hartkodiert, weil Airbnb viele solcher Textfelder
+//      hat und sich deren ids/Struktur ändern können.
+//   3) auf der Fotoraum-Übersicht (z. B. .../photo-tour/<raum-id>, die Seite
+//      mit dem Foto-Grid eines Raums) auf Wunsch automatisch jedes Foto
+//      dieses Raums: klickt nacheinander jedes Foto auf, liest dessen
+//      Editor-Pfad (enthält die feste Foto-ID) + Bild-URL aus und klickt
+//      wieder zurück zum Grid — schickt dann alle gesammelten Fotos ans
+//      QA-Tool, das per Claude-Vision einen Alt-Text-Vorschlag ("visual
+//      description") pro Foto erzeugt. Es wird dabei nirgends "Save"
+//      geklickt oder ein Airbnb-Feld verändert — nur geklickt, um zur
+//      jeweiligen Foto-Detailseite zu navigieren und wieder zurück.
+// Schickt (1)+(2) und (3) an den Hintergrundprozess, der es ans QA-Tool
+// weiterleitet. Ein weiterer Button liest freigegebene Text-Vorschläge vom
+// QA-Tool und trägt sie (nur) ins jeweilige Feld ein — Speichern in Airbnb
+// bleibt bewusst ein manueller Schritt der Person.
+//
+// Es wird nichts auf airbnb.com automatisch gespeichert/abgeschickt.
+
 (function () {
   function extractListingId() {
     const m = location.pathname.match(/\/hosting\/listings\/editor\/(\d+)/);
     return m ? m[1] : null;
   }
 
+  // Auf Seiten mit einer Liste von Unterpanels (z. B. "Description" →
+  // "Listing description" / "Your property" / "Guest access" / ...)
+  // verwendet Airbnb für die Textfelder in JEDEM Unterpanel DIESELBEN
+  // HTML-ids (z. B. immer "listing-description-Deutsch-textarea", egal
+  // welches der Panels gerade offen ist) — live gefunden, kritischer Bug:
+  // ohne Erkennung, welches Panel offen ist, überschreibt das Senden von
+  // "Your property" unbemerkt die vorher gesendeten Werte von "Listing
+  // description" im QA-Tool, weil beide unter demselben Feld-Schlüssel
+  // landen ("es kommt nur der Titel an, nicht alle Texte" — der eigentliche,
+  // tiefere Grund dahinter). Erkennung rein über Position (nicht über den
+  // Text/Wortlaut, der sich ändern kann): Ist eine zweite, weiter rechts
+  // liegende sichtbare Überschrift vorhanden (das offene Panel), zusätzlich
+  // zur Seiten-Überschrift links, wird ihr Text als Präfix vor die id
+  // gesetzt, damit gleiche ids aus verschiedenen Panels nicht kollidieren.
+  function getOpenPanelLabel() {
+    const headings = [...document.querySelectorAll("h1, h2, h3")]
+      .map((h) => ({ text: h.textContent.trim(), rect: h.getBoundingClientRect() }))
+      .filter((h) => h.text && h.text !== "Listing editor" && h.rect.width > 0 && h.rect.height > 0);
+    if (headings.length < 2) return null;
+    headings.sort((a, b) => b.rect.left - a.rect.left);
+    return headings[0].text;
+  }
+
   function extractGenericTextFields() {
     const out = [];
+    const panelLabel = getOpenPanelLabel();
     document.querySelectorAll("textarea, input[type='text']").forEach((el) => {
       if (!el.id) return;
-      out.push({ id: el.id, value: el.value || "" });
+      const id = panelLabel ? `${panelLabel} · ${el.id}` : el.id;
+      out.push({ id, value: el.value || "" });
     });
     return out;
   }
@@ -263,8 +315,26 @@
               return;
             }
             let filled = 0;
+            let wrongPanel = 0;
+            const openPanel = getOpenPanelLabel();
             items.forEach((it) => {
-              const el = document.getElementById(it.target_field_id);
+              // WICHTIG: target_field_id kann jetzt ein Präfix haben ("Your
+              // property · listing-description-Deutsch-textarea"), weil
+              // gleiche Airbnb-ids in verschiedenen Unterpanels kollidieren
+              // (siehe getOpenPanelLabel() oben) — die echte DOM-id ist immer
+              // der Teil NACH dem letzten " · ". Ist ein Präfix vorhanden,
+              // muss zusätzlich GENAU DIESES Unterpanel offen sein, sonst
+              // gehört ein gleichnamiges Feld zu einem ANDEREN, gerade
+              // offenen Panel — sonst würde man versehentlich das falsche
+              // Feld überschreiben.
+              const parts = it.target_field_id.split(" · ");
+              const realId = parts.pop();
+              const requiredPanel = parts.length ? parts.join(" · ") : null;
+              if (requiredPanel && requiredPanel !== openPanel) {
+                wrongPanel++;
+                return;
+              }
+              const el = document.getElementById(realId);
               if (el) {
                 setFieldValue(el, it.proposed_text);
                 filled++;
@@ -272,8 +342,11 @@
             });
             setStatus(
               filled
-                ? `${filled} Feld(er) eingefüllt (rot markiert) — bitte prüfen und in Airbnb selbst „Save“ klicken. Danach im QA-Tool als „umgesetzt“ markieren.`
-                : "Freigegebene Texte gefunden, aber die zugehörigen Felder sind auf dieser Seite nicht sichtbar (z. B. bei Alt-Texten: erst „Add a visual description“ am Foto öffnen). Dann erneut versuchen."
+                ? `${filled} Feld(er) eingefüllt (rot markiert) — bitte prüfen und in Airbnb selbst „Save“ klicken. Danach im QA-Tool als „umgesetzt“ markieren.` +
+                    (wrongPanel ? ` (${wrongPanel} weitere gehören zu einem anderen Unterpanel — dort öffnen und erneut versuchen.)` : "")
+                : wrongPanel
+                  ? `Gefunden, aber gehören zu einem anderen Unterpanel dieser Seite — das jeweils richtige Panel öffnen (z. B. "Your property") und erneut versuchen.`
+                  : "Freigegebene Texte gefunden, aber die zugehörigen Felder sind auf dieser Seite nicht sichtbar (z. B. bei Alt-Texten: erst „Add a visual description“ am Foto öffnen). Dann erneut versuchen."
             );
           }
         );
