@@ -7,11 +7,14 @@ nichts auf airbnb.com verändert — nur gelesen.
 
 ## Warum eine Extension statt Server-seitigem Scraping?
 
-Der Server-seitige Playwright-Import (`lib/otaScraper.js`) sieht nur die
-öffentliche Seite und wird von Airbnbs Bot-Schutz teilweise blockiert. Diese
-Extension läuft dagegen in deinem echten, bereits eingeloggten Chrome — keine
-Headless-Erkennung, kein Bot-Schutz-Thema, und zusätzlich Zugriff auf die
-Host-internen Editor-Felder.
+Das QA-Tool ruft bewusst nie serverseitig die öffentliche Airbnb-/
+Booking.com-Seite ab (kein Playwright, kein Headless-Chromium) — das war
+unzuverlässig (Bot-Schutz, Lade-Skelette/Domain-Redirects auf der
+öffentlichen Seite) und sieht ausserdem nie die Editor-internen Felder.
+Diese Extension läuft dagegen in deinem echten, bereits eingeloggten
+Chrome — keine Headless-Erkennung, kein Bot-Schutz-Thema, und zusätzlich
+Zugriff auf die Host-internen Editor-Felder. Sämtlicher Datenimport läuft
+ausschliesslich über diese Extension.
 
 ## Installation (Entwicklermodus, kein Chrome Web Store nötig)
 

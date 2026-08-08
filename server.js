@@ -6,7 +6,6 @@ const bcrypt = require("bcryptjs");
 
 const db = require("./db");
 const { computeFindings } = require("./lib/checks");
-const { fetchLiveOtaData } = require("./lib/otaScraper");
 const { applyBrowserImport } = require("./lib/browserImport");
 const { mergeTextFields, parseTextFields } = require("./lib/textFields");
 const { extractAirbnbListingId } = require("./lib/airbnbUrl");
@@ -283,44 +282,6 @@ app.post("/channels/:id/summary", requireAuth, (req, res) => {
     req.params.id
   );
   res.redirect("/listings/" + getListingIdForChannel(req.params.id));
-});
-
-app.post("/channels/:id/import", requireAuth, async (req, res) => {
-  const ch = db.prepare("SELECT * FROM channels WHERE id = ?").get(req.params.id);
-  if (!ch) return res.status(404).send("Kanal nicht gefunden.");
-  const result = await fetchLiveOtaData(ch.platform, ch.url);
-  const f = result.fields || {};
-  db.prepare(
-    `UPDATE channels SET
-       declared_bedrooms = COALESCE(?, declared_bedrooms),
-       declared_beds = COALESCE(?, declared_beds),
-       declared_bathrooms = COALESCE(?, declared_bathrooms),
-       declared_guests = COALESCE(?, declared_guests),
-       live_sleeping_text = COALESCE(?, live_sleeping_text),
-       live_source = CASE WHEN ? IS NOT NULL THEN 'scraper' ELSE live_source END,
-       last_imported_at = datetime('now'),
-       import_note = ?
-     WHERE id = ?`
-  ).run(
-    f.bedrooms ?? null,
-    f.beds ?? null,
-    f.bathrooms ?? null,
-    f.guests ?? null,
-    f.sleepingArrangementRaw ?? null,
-    f.sleepingArrangementRaw ?? null,
-    result.note,
-    ch.id
-  );
-  res.redirect(
-    "/listings/" +
-      ch.listing_id +
-      "?msg=" +
-      encodeURIComponent(
-        result.ok
-          ? "Import ausgeführt – Felder wurden vorbefüllt, bitte unten prüfen."
-          : "Import ausgeführt, aber es konnten keine Felder gelesen werden (siehe Hinweis beim Kanal unten)."
-      )
-  );
 });
 
 app.post("/channels/:id/external-id", requireAuth, (req, res) => {

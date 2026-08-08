@@ -19,45 +19,24 @@ freigegeben werden (Vier-Augen-Prinzip), bevor sie als umgesetzt markiert wird.
 4. Hinterlegter Bettentyp pro Zimmer vs. Bettentyp, der auf den Fotos zu sehen ist
 5. Gesamte Schlafkapazität vs. maximale Gästezahl
 
-## Datenimport aus dem OTA-Link (Playwright, live von Airbnb/Booking.com)
+## Datenimport ausschliesslich über die eingeloggte Seite (Chrome-Extension)
 
-Der "Aus Link vorbefüllen"-Button (`lib/otaScraper.js`) öffnet die öffentliche
-Airbnb- bzw. Booking.com-Seite in einem echten, headless Chromium-Browser
-(Playwright) — nicht per einfachem HTML-Fetch. Das ist nötig, weil Airbnb und
-Booking.com die eigentlichen Inhalte erst per JavaScript nachladen; ein
-einfacher `fetch()` sieht davon praktisch nichts (siehe Git-Historie: die
-erste Version hatte genau dieses Problem, "Import ausgeführt" ohne Daten).
+Es wird bewusst **nie** die öffentliche Airbnb-/Booking.com-Seite automatisiert
+abgerufen (kein Playwright-Scraper, kein serverseitiger `fetch()` gegen die
+OTA-Seite) — jeglicher Datenimport läuft ausschliesslich über
+`browser-extension/`, eine kleine Chrome-Extension, die im echten,
+bereits eingeloggten Chrome der Person läuft. Gründe: kein Bot-Schutz-Thema
+(echte menschliche Session statt Headless-Browser), zuverlässiger (kein
+Wettlauf mit Lade-Skeletten/Domain-Redirects auf der öffentlichen Seite), und
+zusätzlich Zugriff auf Host-interne Editor-Felder, die öffentlich nie
+sichtbar sind (Fotorundgang-Zimmerliste, "Sleeping arrangements", Titel/
+Beschreibungstexte, Alt-Texte der Fotos). Details und Installation: siehe
+`browser-extension/README.md`.
 
-Ausgelesen werden: Titel, Anzahl Gäste/Schlafzimmer/Betten/Bäder (aus dem
-sichtbaren Zusammenfassungstext) sowie roh der Textblock unter
-"Where you'll sleep" (Airbnb) bzw. der Zimmer-/Raumtypen-Bereich (Booking.com)
-— letzterer wird zum manuellen Abgleich mit den unten erfassten Zimmern
-angezeigt, ersetzt diese aber nicht automatisch.
-
-**Nach wie vor nicht auslesbar** (bewusste Einschränkung, nicht technisch
-lösbar ohne Host-Login): die Editor-internen Felder "Fotorundgang"
-(Zuordnung der Fotos zu Zimmerkategorien) und ob ein Zimmer im separaten
-Bereich "Schlafgelegenheiten" hinterlegt ist. Genau das war der ursprüngliche
-Fehler, den dieses Tool aufdecken soll — diese Felder bleiben daher immer
-manuell zu erfassen.
-
-**Bot-Schutz:** Erkennt der Scraper eine Verifizierungs-/Captcha-Seite, bricht
-er sauber ab und meldet das — es wird nicht versucht, Bot-Schutz zu umgehen.
-
-**Hinweis zur Zuverlässigkeit:** Airbnb/Booking.com können ihre Seitenstruktur
-jederzeit ändern oder automatisierte Zugriffe erschweren; jeder importierte
-Wert ist als "bitte prüfen" zu behandeln, nie blind zu übernehmen.
-
-## Airbnb-Host-Editor-Import per Chrome-Extension
-
-Der Playwright-Scraper (oben) wird bei Airbnb teilweise von Bot-Schutz
-blockiert, weil er auf der öffentlichen Seite läuft. Als Alternative gibt es
-`browser-extension/` — eine kleine Chrome-Extension, die im echten,
-eingeloggten Chrome der Person läuft (kein Bot-Schutz-Thema, da echte
-menschliche Session) und dabei zusätzlich Zugriff auf Host-interne
-Editor-Felder hat (Fotorundgang-Zimmerliste, "Sleeping arrangements") — genau
-die Felder, die öffentlich nie sichtbar waren. Details und Installation:
-siehe `browser-extension/README.md`.
+(Frühere Version dieses Tools hatte zusätzlich einen "Aus Link vorbefüllen"-
+Button, der per Playwright die öffentliche Seite abgerufen hat — dieser wurde
+entfernt, da explizit gewünscht ist, dass alles über die eingeloggte Seite
+läuft.)
 
 Voraussetzung im QA-Tool:
 
@@ -131,23 +110,16 @@ existiert. Der erste angelegte Account erhält automatisch die Rolle Admin.
 
 ## Deployment
 
-Wird über das mitgelieferte `Dockerfile` gebaut (Basis-Image
-`mcr.microsoft.com/playwright:v1.62.0-noble`, enthält bereits einen zur
-`playwright`-npm-Version passenden Chromium — kein fragiler
-"Browser nachinstallieren"-Schritt nötig). Railway erkennt das Dockerfile
-automatisch und baut damit statt mit dem generischen Node-Buildpack. Das
-Image ist wegen Chromium deutlich grösser als vorher und der Build dauert
-entsprechend länger.
+Wird über das mitgelieferte `Dockerfile` gebaut (schlankes `node:20-slim`-
+Basis-Image — kein Chromium/Playwright mehr nötig, siehe Abschnitt
+"Datenimport" oben: es wird nie mehr serverseitig ein Browser gestartet).
+Railway erkennt das Dockerfile automatisch und baut damit statt mit dem
+generischen Node-Buildpack.
 
 `npm start` startet `server.js`. Persistenz erfolgt über eine SQLite-Datei
 unter `DATA_DIR` (Standard: `./data`). Für dauerhafte Daten auf Railway muss dem
 Service ein **Volume** hinzugefügt und unter dem Pfad, der in `DATA_DIR` steht,
 gemountet werden — sonst gehen Daten bei jedem Redeploy verloren.
-
-Der Live-Import startet pro Klick einen echten Browser-Prozess (Playwright).
-Das braucht mehr Arbeitsspeicher als eine reine Node-App — falls der Import
-auf Railway mit Speicherfehlern abbricht, muss dem Service mehr RAM zugewiesen
-werden.
 
 Benötigte Umgebungsvariablen:
 

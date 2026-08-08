@@ -1,7 +1,8 @@
-# Basis-Image von Microsoft: enthaelt Node.js + bereits vorinstallierten
-# Chromium-Browser passend zur "playwright"-npm-Paketversion unten. Das
-# vermeidet fragile "playwright install --with-deps"-Schritte im Build.
-FROM mcr.microsoft.com/playwright:v1.62.0-noble
+# Schlankes Standard-Node-Image: es wird bewusst NIE die öffentliche
+# Airbnb-/Booking.com-Seite serverseitig abgerufen (kein Playwright/Headless-
+# Chromium mehr nötig) — jeglicher Datenimport läuft ausschliesslich über die
+# Chrome-Extension im eingeloggten Browser der Person (siehe README.md).
+FROM node:20-slim
 
 WORKDIR /app
 
