@@ -19,15 +19,34 @@ freigegeben werden (Vier-Augen-Prinzip), bevor sie als umgesetzt markiert wird.
 4. Hinterlegter Bettentyp pro Zimmer vs. Bettentyp, der auf den Fotos zu sehen ist
 5. Gesamte Schlafkapazität vs. maximale Gästezahl
 
-## Wichtige Einschränkung: Datenimport aus dem OTA-Link
+## Datenimport aus dem OTA-Link (Playwright, live von Airbnb/Booking.com)
 
-Airbnb und Booking.com bieten keine offizielle API für die Editor-internen Felder
-(Fotorundgang-Aufteilung, Schlafgelegenheiten pro Zimmer). Diese sind nur sichtbar,
-wenn man im jeweiligen Host-Editor eingeloggt ist, und müssen daher manuell erfasst
-werden. Der "Aus Link vorbefüllen"-Button versucht best-effort, öffentlich sichtbare
-Felder (Titel, Beschreibung, teilweise Gäste-/Zimmer-/Bettenangaben) auszulesen —
-das kann je nach Seitenstruktur fehlschlagen, da Airbnb/Booking.com Inhalte oft erst
-per JavaScript nachladen. Jeder importierte Wert ist klar als "bitte prüfen" markiert.
+Der "Aus Link vorbefüllen"-Button (`lib/otaScraper.js`) öffnet die öffentliche
+Airbnb- bzw. Booking.com-Seite in einem echten, headless Chromium-Browser
+(Playwright) — nicht per einfachem HTML-Fetch. Das ist nötig, weil Airbnb und
+Booking.com die eigentlichen Inhalte erst per JavaScript nachladen; ein
+einfacher `fetch()` sieht davon praktisch nichts (siehe Git-Historie: die
+erste Version hatte genau dieses Problem, "Import ausgeführt" ohne Daten).
+
+Ausgelesen werden: Titel, Anzahl Gäste/Schlafzimmer/Betten/Bäder (aus dem
+sichtbaren Zusammenfassungstext) sowie roh der Textblock unter
+"Where you'll sleep" (Airbnb) bzw. der Zimmer-/Raumtypen-Bereich (Booking.com)
+— letzterer wird zum manuellen Abgleich mit den unten erfassten Zimmern
+angezeigt, ersetzt diese aber nicht automatisch.
+
+**Nach wie vor nicht auslesbar** (bewusste Einschränkung, nicht technisch
+lösbar ohne Host-Login): die Editor-internen Felder "Fotorundgang"
+(Zuordnung der Fotos zu Zimmerkategorien) und ob ein Zimmer im separaten
+Bereich "Schlafgelegenheiten" hinterlegt ist. Genau das war der ursprüngliche
+Fehler, den dieses Tool aufdecken soll — diese Felder bleiben daher immer
+manuell zu erfassen.
+
+**Bot-Schutz:** Erkennt der Scraper eine Verifizierungs-/Captcha-Seite, bricht
+er sauber ab und meldet das — es wird nicht versucht, Bot-Schutz zu umgehen.
+
+**Hinweis zur Zuverlässigkeit:** Airbnb/Booking.com können ihre Seitenstruktur
+jederzeit ändern oder automatisierte Zugriffe erschweren; jeder importierte
+Wert ist als "bitte prüfen" zu behandeln, nie blind zu übernehmen.
 
 ## Rollen
 
@@ -49,10 +68,23 @@ existiert. Der erste angelegte Account erhält automatisch die Rolle Admin.
 
 ## Deployment
 
-Node-App, `npm start` startet `server.js`. Persistenz erfolgt über eine SQLite-Datei
+Wird über das mitgelieferte `Dockerfile` gebaut (Basis-Image
+`mcr.microsoft.com/playwright:v1.62.0-noble`, enthält bereits einen zur
+`playwright`-npm-Version passenden Chromium — kein fragiler
+"Browser nachinstallieren"-Schritt nötig). Railway erkennt das Dockerfile
+automatisch und baut damit statt mit dem generischen Node-Buildpack. Das
+Image ist wegen Chromium deutlich grösser als vorher und der Build dauert
+entsprechend länger.
+
+`npm start` startet `server.js`. Persistenz erfolgt über eine SQLite-Datei
 unter `DATA_DIR` (Standard: `./data`). Für dauerhafte Daten auf Railway muss dem
 Service ein **Volume** hinzugefügt und unter dem Pfad, der in `DATA_DIR` steht,
 gemountet werden — sonst gehen Daten bei jedem Redeploy verloren.
+
+Der Live-Import startet pro Klick einen echten Browser-Prozess (Playwright).
+Das braucht mehr Arbeitsspeicher als eine reine Node-App — falls der Import
+auf Railway mit Speicherfehlern abbricht, muss dem Service mehr RAM zugewiesen
+werden.
 
 Benötigte Umgebungsvariablen:
 

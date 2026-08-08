@@ -52,6 +52,12 @@
     <span class="muted">Liest nur öffentlich sichtbare Felder aus, wenn technisch möglich. Fotorundgang/Schlafgelegenheiten pro Zimmer sind nicht öffentlich und müssen unten manuell erfasst werden.</span>
   </form>
   <% if (ch.import_note) { %><div class="alert info"><%= ch.import_note %> <span class="muted">(<%= ch.last_imported_at %>)</span></div><% } %>
+  <% if (ch.live_sleeping_text) { %>
+  <div class="alert info">
+    <strong>Live von der OTA-Seite gelesen ("Where you'll sleep" / Zimmer-Übersicht) — zum Abgleich mit den unten erfassten Zimmern:</strong>
+    <pre style="white-space:pre-wrap;margin:6px 0 0;font-family:inherit;font-size:0.95em"><%= ch.live_sleeping_text %></pre>
+  </div>
+  <% } %>
   <% } %>
 
   <h3>Zusammenfassung / Kopfzeile (wie im Editor angezeigt)</h3>

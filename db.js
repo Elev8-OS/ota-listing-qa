@@ -74,4 +74,14 @@ CREATE TABLE IF NOT EXISTS proposals (
 );
 `);
 
+// Migration: neue Spalte für den roh ausgelesenen "Where you'll sleep" /
+// "Room types" Textblock aus dem Live-Import (Playwright), zum Abgleich mit
+// den manuell erfassten Zimmern. ALTER TABLE ADD COLUMN ist in SQLite nicht
+// idempotent, daher try/catch für bereits existierende Installationen.
+try {
+  db.exec("ALTER TABLE channels ADD COLUMN live_sleeping_text TEXT");
+} catch (e) {
+  if (!/duplicate column/i.test(e.message)) throw e;
+}
+
 module.exports = db;

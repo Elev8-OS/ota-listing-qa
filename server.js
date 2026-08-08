@@ -6,7 +6,7 @@ const bcrypt = require("bcryptjs");
 
 const db = require("./db");
 const { computeFindings } = require("./lib/checks");
-const { fetchPublicListingData } = require("./lib/importer");
+const { fetchLiveOtaData } = require("./lib/otaScraper");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -260,7 +260,7 @@ app.post("/channels/:id/summary", requireAuth, (req, res) => {
 app.post("/channels/:id/import", requireAuth, async (req, res) => {
   const ch = db.prepare("SELECT * FROM channels WHERE id = ?").get(req.params.id);
   if (!ch) return res.status(404).send("Kanal nicht gefunden.");
-  const result = await fetchPublicListingData(ch.url);
+  const result = await fetchLiveOtaData(ch.platform, ch.url);
   const f = result.fields || {};
   db.prepare(
     `UPDATE channels SET
@@ -268,6 +268,7 @@ app.post("/channels/:id/import", requireAuth, async (req, res) => {
        declared_beds = COALESCE(?, declared_beds),
        declared_bathrooms = COALESCE(?, declared_bathrooms),
        declared_guests = COALESCE(?, declared_guests),
+       live_sleeping_text = COALESCE(?, live_sleeping_text),
        last_imported_at = datetime('now'),
        import_note = ?
      WHERE id = ?`
@@ -276,6 +277,7 @@ app.post("/channels/:id/import", requireAuth, async (req, res) => {
     f.beds ?? null,
     f.bathrooms ?? null,
     f.guests ?? null,
+    f.sleepingArrangementRaw ?? null,
     result.note,
     ch.id
   );
