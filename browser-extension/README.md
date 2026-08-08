@@ -8,7 +8,7 @@ nichts auf airbnb.com verändert — nur gelesen.
 ## Warum eine Extension statt Server-seitigem Scraping?
 
 Der Server-seitige Playwright-Import (`lib/otaScraper.js`) sieht nur die
-öventliche Seite und wird von Airbnbs Bot-Schutz teilweise blockiert. Diese
+öffentliche Seite und wird von Airbnbs Bot-Schutz teilweise blockiert. Diese
 Extension läuft dagegen in deinem echten, bereits eingeloggten Chrome — keine
 Headless-Erkennung, kein Bot-Schutz-Thema, und zusätzlich Zugriff auf die
 Host-internen Editor-Felder.
