@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<title>OTA QA-Tool Import – Einstellungen</title>
+<style>
+  body { font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 480px; margin: 24px auto; padding: 0 16px; color: #222; }
+  h2 { margin-bottom: 4px; }
+  p.hint { color: #666; font-size: 12px; }
+  label { display: block; margin-top: 14px; font-weight: 600; font-size: 13px; }
+  input { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; }
+  button { margin-top: 16px; margin-right: 8px; padding: 8px 16px; background: #e0004d; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  button.secondary { background: #eee; color: #222; }
+  #status { margin-top: 12px; font-size: 13px; }
+</style>
+</head>
+<body>
+  <h2>OTA QA-Tool – Airbnb-Import</h2>
+  <p class="hint">
+    Diese Werte müssen mit dem QA-Tool übereinstimmen. Der API-Key entspricht der
+    Umgebungsvariable <code>EXTENSION_API_KEY</code>, die im QA-Tool (Railway) gesetzt ist.
+    Beide Werte werden nur lokal in diesem Chrome-Profil gespeichert.
+  </p>
+
+  <label>QA-Tool Basis-URL</label>
+  <input id="baseUrl" placeholder="https://web-production-362e.up.railway.app" />
+
+  <label>API-Key</label>
+  <input id="apiKey" type="password" />
+
+  <button id="save">Speichern</button>
+  <button id="test" class="secondary">Verbindung testen</button>
+
+  <div id="status"></div>
+
+  <script src="options.js"></script>
+</body>
+</html>

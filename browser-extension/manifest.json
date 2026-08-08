@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "OTA QA-Tool – Airbnb Host-Editor Import",
+  "version": "1.0.0",
+  "description": "Liest Fotorundgang- und Sleeping-Arrangements-Daten aus dem eingeloggten Airbnb-Host-Editor und sendet sie an das interne OTA-Listing-QA-Tool.",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.airbnb.com/hosting/listings/editor/*", "https://www.airbnb.ch/hosting/listings/editor/*", "https://www.airbnb.de/hosting/listings/editor/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://www.airbnb.com/*",
+    "https://www.airbnb.ch/*",
+    "https://www.airbnb.de/*",
+    "https://web-production-362e.up.railway.app/*"
+  ],
+  "optional_host_permissions": ["https://*/*"],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
