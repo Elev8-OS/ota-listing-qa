@@ -51,13 +51,38 @@
     <button type="submit" class="secondary">Aus Link vorbefüllen (Beta)</button>
     <span class="muted">Liest nur öffentlich sichtbare Felder aus, wenn technisch möglich. Fotorundgang/Schlafgelegenheiten pro Zimmer sind nicht öffentlich und müssen unten manuell erfasst werden.</span>
   </form>
-  <% if (ch.import_note) { %><div class="alert info"><%= ch.import_note %> <span class="muted">(<%= ch.last_imported_at %>)</span></div><% } %>
-  <% if (ch.live_sleeping_text) { %>
+  <% } %>
+
+  <% if (ch.platform === 'airbnb') { %>
+  <form method="post" action="/channels/<%= ch.id %>/external-id" class="row" style="margin:10px 0;align-items:flex-end">
+    <div style="flex:2">
+      <label>Airbnb Listing-ID (für die Browser-Extension)</label>
+      <input type="text" name="external_id" value="<%= ch.external_id || '' %>" placeholder="z. B. 1135860716568917181" />
+    </div>
+    <div style="flex:3" class="muted">
+      Findest du in der Editor-URL: airbnb.com/hosting/listings/<strong>editor/&lt;ID&gt;</strong>/details/photo-tour.
+      Damit die QA-Tool-Chrome-Extension weiss, welchen Kanal sie hier aktualisieren soll.
+    </div>
+    <button type="submit" class="secondary">Speichern</button>
+  </form>
+  <% } %>
+
+  <% if (ch.import_note) { %>
   <div class="alert info">
-    <strong>Live von der OTA-Seite gelesen ("Where you'll sleep" / Zimmer-Übersicht) — zum Abgleich mit den unten erfassten Zimmern:</strong>
-    <pre style="white-space:pre-wrap;margin:6px 0 0;font-family:inherit;font-size:0.95em"><%= ch.live_sleeping_text %></pre>
+    <%= ch.import_note %> <span class="muted">(<%= ch.last_imported_at %><% if (ch.live_source) { %> · Quelle: <%= ch.live_source === 'extension' ? 'Browser-Extension (dein eingeloggter Host-Editor)' : 'automatischer Scraper (öffentliche Seite)' %><% } %>)</span>
   </div>
   <% } %>
+  <% if (ch.live_sleeping_text) { %>
+  <div class="alert info">
+    <strong>
+      <% if (ch.live_source === 'extension') { %>
+        Live aus deinem eingeloggten Airbnb-Host-Editor gelesen (Fotorundgang + Sleeping arrangements) — zum Abgleich mit den unten erfassten Zimmern:
+      <% } else { %>
+        Live von der OTA-Seite gelesen ("Where you'll sleep" / Zimmer-Übersicht) — zum Abgleich mit den unten erfassten Zimmern:
+      <% } %>
+    </strong>
+    <pre style="white-space:pre-wrap;margin:6px 0 0;font-family:inherit;font-size:0.95em"><%= ch.live_sleeping_text %></pre>
+  </div>
   <% } %>
 
   <h3>Zusammenfassung / Kopfzeile (wie im Editor angezeigt)</h3>
