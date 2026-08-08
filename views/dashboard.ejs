@@ -4,6 +4,11 @@
     <h1>Inserate</h1>
     <p class="subtitle">Neuaufbau &amp; laufende Qualitätssicherung über alle OTA-Kanäle. Jeder Befund wird als Vorschlag eingereicht und muss von einer zweiten Person freigegeben werden, bevor er als „umgesetzt“ markiert wird.</p>
   </div>
+  <% if (user.role === 'admin') { %>
+  <form method="post" action="/mdv/import">
+    <button type="submit" class="secondary">Listings aus MyDataValue importieren</button>
+  </form>
+  <% } %>
 </div>
 
 <% if (msg) { %><div class="alert success"><%= msg %></div><% } %>
