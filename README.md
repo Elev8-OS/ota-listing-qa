@@ -34,12 +34,12 @@ sichtbaren Zusammenfassungstext) sowie roh der Textblock unter
 — letzterer wird zum manuellen Abgleich mit den unten erfassten Zimmern
 angezeigt, ersetzt diese aber nicht automatisch.
 
-**Nach wie vor nicht auslesbar über den öffentlichen Scraper** (Airbnb blockt
-den Headless-Zugriff teilweise; siehe nächster Abschnitt für die Lösung
-per Chrome-Extension): die Editor-internen Felder "Fotorundgang"
+**Nach wie vor nicht auslesbar** (bewusste Einschränkung, nicht technisch
+lösbar ohne Host-Login): die Editor-internen Felder "Fotorundgang"
 (Zuordnung der Fotos zu Zimmerkategorien) und ob ein Zimmer im separaten
 Bereich "Schlafgelegenheiten" hinterlegt ist. Genau das war der ursprüngliche
-Fehler, den dieses Tool aufdecken soll.
+Fehler, den dieses Tool aufdecken soll — diese Felder bleiben daher immer
+manuell zu erfassen.
 
 **Bot-Schutz:** Erkennt der Scraper eine Verifizierungs-/Captcha-Seite, bricht
 er sauber ab und meldet das — es wird nicht versucht, Bot-Schutz zu umgehen.
@@ -73,6 +73,29 @@ Extension und QA-Tool, kein Ersatz für Airbnb-Zugangsdaten — die Extension
 nutzt ausschliesslich die bereits bestehende, legitime Browser-Session der
 Person. Es wird nie versucht, sich anderswo einzuloggen oder Bot-/Captcha-Schutz
 zu umgehen.
+
+## "Alle Texte im Inserat": KI-Umformulierung, Vier-Augen-Freigabe, Rückschreiben
+
+Über dieselbe Extension werden zusätzlich auf jeder Airbnb-Editor-Unterseite
+(Title, "Listing description", "Your property", "Guest access", "Interaction
+with guests", "Other details to note", ...) generisch alle Textfelder
+erfasst (`channels.text_fields`, pro Seitenpfad). Das QA-Tool zeigt sie unter
+"Erfasste Texte aus dem Airbnb-Editor" an; jeder Text kann als Umformulierung
+vorgeschlagen werden (`/channels/:id/propose-text`), durchläuft die normale
+Vier-Augen-Freigabe (niemand gibt den eigenen Vorschlag frei) und kann danach
+per Extension-Button "Freigegebene Texte hier einfüllen"
+(`/api/browser-import/pending-writeback`) ins passende Feld auf genau der
+Editor-Seite eingetragen werden, von der es stammt. Gespeichert wird in
+Airbnb weiterhin nur manuell durch die Person selbst — die Extension füllt
+das Feld, klickt aber nie Airbnbs eigenen "Save"-Button.
+
+Die eigentliche KI-Umformulierung (automatisches Neuschreiben des erfassten
+Texts) ist im QA-Tool aktuell **nicht** als eigener "KI-Button" eingebaut —
+das Vorschlagsfeld ist ein normales, vorausgefülltes Textfeld, in das eine
+von aussen (z. B. mit ChatGPT/Claude) erstellte Umformulierung eingefügt
+werden kann, bevor sie zur Freigabe eingereicht wird. Eine direkte
+LLM-Anbindung im Tool selbst wäre ein zusätzlicher Schritt (eigener API-Key,
+Kosten) und wurde bewusst nicht ohne Rückfrage ergänzt.
 
 ## Rollen
 
@@ -119,7 +142,6 @@ Benötigte Umgebungsvariablen:
 - `NODE_ENV=production`
 - `DEV_LOGIN_ENABLED` – optional, Standard: aktiv (nicht gesetzt oder alles außer
   `"false"`). Siehe Abschnitt "Dev-Login" unten.
-- `EXTENSION_API_KEY` – optional, für die Chrome-Extension (siehe oben).
 
 ## Dev-Login (ohne Passwort)
 

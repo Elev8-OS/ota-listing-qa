@@ -8,7 +8,7 @@ nichts auf airbnb.com verändert — nur gelesen.
 ## Warum eine Extension statt Server-seitigem Scraping?
 
 Der Server-seitige Playwright-Import (`lib/otaScraper.js`) sieht nur die
-öffentliche Seite und wird von Airbnbs Bot-Schutz teilweise blockiert. Diese
+öventliche Seite und wird von Airbnbs Bot-Schutz teilweise blockiert. Diese
 Extension läuft dagegen in deinem echten, bereits eingeloggten Chrome — keine
 Headless-Erkennung, kein Bot-Schutz-Thema, und zusätzlich Zugriff auf die
 Host-internen Editor-Felder.
@@ -43,3 +43,39 @@ Die Extraktion basiert auf Text-Mustern (kein festes DOM-Schema, da Airbnb
 seine internen CSS-Klassen häufig ändert). Ändert Airbnb den Aufbau des
 Editors grundlegend, kann die Erkennung einzelner Felder ausfallen — das
 QA-Tool zeigt dann entsprechend weniger oder gar keine Felder an.
+
+## "Alle Texte im Inserat" — KI-Umformulierung + Rückschreiben (Vier-Augen)
+
+Zusätzlich zu den Fotorundgang-Feldern liest die Extension auf **jeder**
+Airbnb-Editor-Unterseite generisch alle sichtbaren `<textarea>`- und
+`<input type="text">`-Felder mit HTML-`id` aus (Title, "Listing description",
+"Your property", "Guest access", "Interaction with guests", "Other details to
+note", ...). Das ist bewusst nicht auf einzelne Felder hartkodiert, weil
+Airbnb viele solcher Textfelder hat und sich deren `id`s/Struktur ändern
+können — jede neue Editor-Unterseite, die du einmal mit der Extension
+besuchst, wird automatisch erfasst.
+
+Ablauf:
+
+1. Auf einer Editor-Unterseite (z. B. `.../details/title`) auf **"An OTA
+   QA-Tool senden"** klicken — alle Textfelder dieser Seite werden zusammen
+   mit dem Seitenpfad ans QA-Tool geschickt und dort unter "Erfasste Texte
+   aus dem Airbnb-Editor" angezeigt.
+2. Im QA-Tool kann jeder Text als Umformulierung eingereicht werden (Textfeld
+   vorausgefüllt mit dem aktuellen Wert — hier die KI-generierte oder von
+   Hand verbesserte Version eintragen und "als Vorschlag einreichen").
+3. Eine **zweite** Person prüft und gibt frei (Vier-Augen-Prinzip, wie bei
+   allen anderen Korrekturen in diesem Tool — niemand kann den eigenen
+   Vorschlag freigeben).
+4. Zurück auf genau der Editor-Unterseite, von der das Feld stammt, auf
+   **"Freigegebene Texte hier einfüllen"** klicken — die Extension holt die
+   freigegebenen Vorschläge für diese Seite und trägt sie ins jeweilige Feld
+   ein (rot umrandet zur Kontrolle).
+5. **Wichtig:** Die Extension klickt **nie** selbst auf Airbnbs "Save" /
+   "Speichern". Das Einfüllen ist absichtlich nur Vorbereitung — du prüfst
+   den eingefüllten Text und speicherst selbst in Airbnb. Danach im QA-Tool
+   den Vorschlag als "umgesetzt" markieren.
+
+Es wird also nie automatisch etwas in Airbnb gespeichert oder abgeschickt —
+nur gelesen (Schritt 1) bzw. ins Formularfeld eingetragen, ohne zu speichern
+(Schritt 4).
