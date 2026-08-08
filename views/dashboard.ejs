@@ -1,0 +1,51 @@
+<%- include('partials/head', { title: 'Inserate', user }) %>
+<div class="flex-between">
+  <div>
+    <h1>Inserate</h1>
+    <p class="subtitle">Neuaufbau &amp; laufende Qualitätssicherung über alle OTA-Kanäle. Jeder Befund wird als Vorschlag eingereicht und muss von einer zweiten Person freigegeben werden, bevor er als „umgesetzt“ markiert wird.</p>
+  </div>
+</div>
+
+<% if (msg) { %><div class="alert success"><%= msg %></div><% } %>
+
+<div class="card">
+  <h3 style="margin-top:0">Neues Inserat anlegen</h3>
+  <form method="post" action="/listings">
+    <div class="row">
+      <div>
+        <label>Name des Inserats / Objekts</label>
+        <input type="text" name="name" placeholder="z. B. The R Apartment Chrischona" required />
+      </div>
+      <div>
+        <label>Notiz (optional)</label>
+        <input type="text" name="note" placeholder="z. B. Basel, 1 Schlafzimmer laut Grundriss" />
+      </div>
+    </div>
+    <button type="submit" style="margin-top:12px">Anlegen</button>
+  </form>
+</div>
+
+<div class="grid">
+  <% listings.forEach(function(l) { %>
+    <a class="listing-item" href="/listings/<%= l.id %>" style="text-decoration:none;color:inherit">
+      <div>
+        <h3><%= l.name %></h3>
+        <div class="muted"><%= l.note || '—' %> · <%= l.channels.length %> Kanal/Kanäle</div>
+      </div>
+      <div style="text-align:right">
+        <% if (l.totalFindings === 0) { %>
+          <span class="badge ok">keine Befunde offen</span>
+        <% } else { %>
+          <span class="badge high"><%= l.totalFindings %> Befund(e) offen</span>
+        <% } %>
+        <% if (l.openProposals > 0) { %>
+          <div style="margin-top:6px"><span class="badge mid"><%= l.openProposals %> Vorschlag/Vorschläge zur Freigabe</span></div>
+        <% } %>
+      </div>
+    </a>
+  <% }) %>
+  <% if (listings.length === 0) { %>
+    <p class="muted">Noch keine Inserate erfasst.</p>
+  <% } %>
+</div>
+<%- include('partials/foot') %>

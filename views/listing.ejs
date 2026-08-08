@@ -1,0 +1,200 @@
+<%- include('partials/head', { title: listing.name, user }) %>
+<a href="/" class="muted">← Alle Inserate</a>
+<div class="flex-between" style="margin-top:8px">
+  <div>
+    <h1><%= listing.name %></h1>
+    <p class="subtitle"><%= listing.note || '' %></p>
+  </div>
+  <% if (user.role === 'admin') { %>
+  <form method="post" action="/listings/<%= listing.id %>/delete" onsubmit="return confirm('Inserat inkl. aller Kanäle, Zimmer und Vorschläge wirklich löschen?')">
+    <button type="submit" class="secondary">Inserat löschen</button>
+  </form>
+  <% } %>
+</div>
+
+<% if (msg) { %><div class="alert success"><%= msg %></div><% } %>
+
+<div class="card">
+  <h3 style="margin-top:0">Kanal hinzufügen</h3>
+  <form method="post" action="/listings/<%= listing.id %>/channels">
+    <div class="row">
+      <div>
+        <label>Plattform</label>
+        <select name="platform" required>
+          <option value="airbnb">Airbnb</option>
+          <option value="booking">Booking.com</option>
+        </select>
+      </div>
+      <div style="flex:2">
+        <label>Link zum Inserat</label>
+        <input type="url" name="url" placeholder="https://www.airbnb.ch/rooms/..." />
+      </div>
+    </div>
+    <button type="submit" style="margin-top:12px">Kanal anlegen</button>
+  </form>
+</div>
+
+<% channels.forEach(function(ch) { %>
+<div class="card">
+  <div class="flex-between">
+    <h2 style="margin:0;border:none;padding:0">
+      <%= ch.platform === 'airbnb' ? 'Airbnb' : 'Booking.com' %>
+      <% if (ch.url) { %> · <a href="<%= ch.url %>" target="_blank" rel="noopener">Inserat öffnen ↗</a><% } %>
+    </h2>
+    <form method="post" action="/channels/<%= ch.id %>/delete" onsubmit="return confirm('Kanal wirklich löschen?')">
+      <button type="submit" class="secondary">Kanal löschen</button>
+    </form>
+  </div>
+
+  <% if (ch.url) { %>
+  <form method="post" action="/channels/<%= ch.id %>/import" style="margin:10px 0">
+    <button type="submit" class="secondary">Aus Link vorbefüllen (Beta)</button>
+    <span class="muted">Liest nur öffentlich sichtbare Felder aus, wenn technisch möglich. Fotorundgang/Schlafgelegenheiten pro Zimmer sind nicht öffentlich und müssen unten manuell erfasst werden.</span>
+  </form>
+  <% if (ch.import_note) { %><div class="alert info"><%= ch.import_note %> <span class="muted">(<%= ch.last_imported_at %>)</span></div><% } %>
+  <% } %>
+
+  <h3>Zusammenfassung / Kopfzeile (wie im Editor angezeigt)</h3>
+  <form method="post" action="/channels/<%= ch.id %>/summary">
+    <div class="row">
+      <div><label>Schlafzimmer</label><input type="number" min="0" name="declared_bedrooms" value="<%= ch.declared_bedrooms %>" /></div>
+      <div><label>Betten</label><input type="number" min="0" name="declared_beds" value="<%= ch.declared_beds %>" /></div>
+      <div><label>Badezimmer</label><input type="number" step="0.5" min="0" name="declared_bathrooms" value="<%= ch.declared_bathrooms %>" /></div>
+      <div><label>Max. Gäste</label><input type="number" min="0" name="declared_guests" value="<%= ch.declared_guests %>" /></div>
+    </div>
+    <button type="submit" style="margin-top:10px">Speichern</button>
+  </form>
+
+  <h3>Zimmer mit Schlafgelegenheit (aus Fotorundgang)</h3>
+  <table>
+    <thead><tr>
+      <th>Name</th><th>Typ</th><th>Fotos</th><th>Betten</th><th>Kapazität</th>
+      <th>Bettentyp hinterlegt</th><th>Bettentyp laut Foto</th><th>In „Schlafgelegenheiten“?</th><th></th>
+    </tr></thead>
+    <tbody>
+    <% ch.rooms.forEach(function(r) { %>
+      <tr>
+        <form method="post" action="/rooms/<%= r.id %>/update">
+        <td><input type="text" name="name" value="<%= r.name %>" style="min-width:110px" /></td>
+        <td>
+          <select name="room_type">
+            <% ['schlafzimmer','wohnzimmer','sonstiges'].forEach(function(t) { %>
+              <option value="<%= t %>" <%= r.room_type===t?'selected':'' %>><%= t %></option>
+            <% }) %>
+          </select>
+        </td>
+        <td><input type="number" min="0" name="photo_count" value="<%= r.photo_count %>" style="width:60px" /></td>
+        <td><input type="number" min="0" name="bed_count" value="<%= r.bed_count %>" style="width:60px" /></td>
+        <td><input type="number" min="0" name="sleep_capacity" value="<%= r.sleep_capacity %>" style="width:60px" /></td>
+        <td>
+          <select name="declared_bed_type">
+            <% ['','Einzelbett','Doppelbett','Kingsize-Doppelbett','Queensize-Doppelbett','Etagenbett','Schlafcouch','Sonstiges'].forEach(function(t) { %>
+              <option value="<%= t %>" <%= r.declared_bed_type===t?'selected':'' %>><%= t || '–' %></option>
+            <% }) %>
+          </select>
+        </td>
+        <td>
+          <select name="photo_bed_type">
+            <% ['','Einzelbett','Doppelbett','Kingsize-Doppelbett','Queensize-Doppelbett','Etagenbett','Schlafcouch','Sonstiges'].forEach(function(t) { %>
+              <option value="<%= t %>" <%= r.photo_bed_type===t?'selected':'' %>><%= t || '–' %></option>
+            <% }) %>
+          </select>
+        </td>
+        <td style="text-align:center"><input type="checkbox" name="in_schlafgelegenheiten" <%= r.in_schlafgelegenheiten ? 'checked' : '' %> /></td>
+        <td><button type="submit" class="secondary">Speichern</button></td>
+        </form>
+      </tr>
+    <% }) %>
+    </tbody>
+  </table>
+
+  <form method="post" action="/channels/<%= ch.id %>/rooms" class="card" style="background:#fafafa;margin-top:12px">
+    <strong>Neues Zimmer erfassen</strong>
+    <div class="row" style="margin-top:8px">
+      <div><label>Name</label><input type="text" name="name" placeholder="z. B. Schlafzimmer 1" required /></div>
+      <div><label>Typ</label>
+        <select name="room_type">
+          <option value="schlafzimmer">schlafzimmer</option>
+          <option value="wohnzimmer">wohnzimmer</option>
+          <option value="sonstiges">sonstiges</option>
+        </select>
+      </div>
+      <div><label>Fotos</label><input type="number" min="0" name="photo_count" value="0" /></div>
+      <div><label>Betten</label><input type="number" min="0" name="bed_count" value="1" /></div>
+      <div><label>Kapazität (Personen)</label><input type="number" min="0" name="sleep_capacity" value="2" /></div>
+    </div>
+    <div class="row">
+      <div><label>Bettentyp hinterlegt</label>
+        <select name="declared_bed_type">
+          <% ['','Einzelbett','Doppelbett','Kingsize-Doppelbett','Queensize-Doppelbett','Etagenbett','Schlafcouch','Sonstiges'].forEach(function(t) { %>
+            <option value="<%= t %>"><%= t || '–' %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div><label>Bettentyp laut Foto</label>
+        <select name="photo_bed_type">
+          <% ['','Einzelbett','Doppelbett','Kingsize-Doppelbett','Queensize-Doppelbett','Etagenbett','Schlafcouch','Sonstiges'].forEach(function(t) { %>
+            <option value="<%= t %>"><%= t || '–' %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div class="check"><input type="checkbox" name="in_schlafgelegenheiten" id="isg-<%= ch.id %>" /><label for="isg-<%= ch.id %>" style="margin:0">bereits in „Schlafgelegenheiten“ hinterlegt</label></div>
+    </div>
+    <button type="submit" style="margin-top:10px">Zimmer hinzufügen</button>
+  </form>
+
+  <h3>Automatisch erkannte Befunde</h3>
+  <% if (ch.findings.length === 0) { %>
+    <p class="muted">Keine Inkonsistenzen anhand der aktuell erfassten Daten erkannt.</p>
+  <% } %>
+  <% ch.findings.forEach(function(f) { %>
+    <div class="finding <%= f.severity %>">
+      <h4><%= f.title %></h4>
+      <p><%= f.detail %></p>
+      <div class="suggested"><strong>Formulierungsvorschlag zum Kopieren:</strong><br /><%= f.suggestedText %></div>
+      <% if (canPropose) { %>
+      <form method="post" action="/channels/<%= ch.id %>/propose">
+        <input type="hidden" name="finding_key" value="<%= f.key %>" />
+        <input type="hidden" name="title" value="<%= f.title %>" />
+        <textarea name="proposed_text"><%= f.suggestedText %></textarea>
+        <button type="submit" style="margin-top:6px">Als Vorschlag einreichen</button>
+      </form>
+      <% } %>
+    </div>
+  <% }) %>
+
+  <h3>Vorschläge &amp; Freigaben (Vier-Augen-Prinzip)</h3>
+  <% if (ch.proposals.length === 0) { %><p class="muted">Noch keine Vorschläge für diesen Kanal.</p><% } %>
+  <% ch.proposals.forEach(function(p) { %>
+    <div class="proposal">
+      <div class="flex-between">
+        <strong><%= p.title %></strong>
+        <span class="status-pill status-<%= p.status %>"><%= p.status %></span>
+      </div>
+      <p style="white-space:pre-wrap"><%= p.proposed_text %></p>
+      <div class="meta">
+        Vorgeschlagen von <%= p.proposed_by_name %> am <%= p.created_at %>
+        <% if (p.reviewed_by_name) { %> · geprüft von <%= p.reviewed_by_name %> am <%= p.reviewed_at %><% } %>
+        <% if (p.review_comment) { %> · Kommentar: „<%= p.review_comment %>“<% } %>
+      </div>
+      <% if (p.status === 'offen' && canReview && p.proposed_by !== user.id) { %>
+        <div style="margin-top:10px" class="row">
+          <form method="post" action="/proposals/<%= p.id %>/approve"><button type="submit" class="success">Freigeben</button></form>
+          <form method="post" action="/proposals/<%= p.id %>/reject" style="flex:2">
+            <input type="text" name="review_comment" placeholder="Begründung für Ablehnung (optional)" />
+            <button type="submit" class="danger" style="margin-top:6px">Ablehnen</button>
+          </form>
+        </div>
+      <% } else if (p.status === 'offen' && p.proposed_by === user.id) { %>
+        <p class="muted" style="margin-top:8px">Wartet auf Freigabe durch eine zweite Person — du kannst deinen eigenen Vorschlag nicht selbst freigeben.</p>
+      <% } %>
+      <% if (p.status === 'freigegeben') { %>
+        <form method="post" action="/proposals/<%= p.id %>/done" style="margin-top:8px">
+          <button type="submit" class="secondary">Änderung wurde im <%= ch.platform === 'airbnb' ? 'Airbnb' : 'Booking.com' %>-Editor umgesetzt – als erledigt markieren</button>
+        </form>
+      <% } %>
+    </div>
+  <% }) %>
+</div>
+<% }) %>
+<%- include('partials/foot') %>

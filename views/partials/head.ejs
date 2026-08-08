@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title><%= typeof title !== 'undefined' ? title + ' · OTA QA-Tool' : 'OTA QA-Tool' %></title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<% if (typeof user !== 'undefined' && user) { %>
+<header class="topbar">
+  <a class="brand" href="/">OTA QA-Tool</a>
+  <nav>
+    <a href="/">Inserate</a>
+    <% if (user.role === 'admin') { %><a href="/users">Benutzer</a><% } %>
+    <a href="/account">Konto</a>
+    <span class="who"><%= user.name %> · <span class="role-badge role-<%= user.role %>"><%= user.role %></span></span>
+    <form method="post" action="/logout" style="display:inline"><button class="link-btn" type="submit">Abmelden</button></form>
+  </nav>
+</header>
+<% } %>
+<main class="container">

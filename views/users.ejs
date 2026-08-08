@@ -1,0 +1,55 @@
+<%- include('partials/head', { title: 'Benutzer', user }) %>
+<h1>Benutzer</h1>
+<p class="subtitle">Rollen: <strong>Bearbeiter</strong> reicht Vorschläge ein, <strong>Prüfer</strong> gibt frei/lehnt ab, <strong>Admin</strong> kann beides und verwaltet Benutzer. Niemand kann seinen eigenen Vorschlag freigeben — das Vier-Augen-Prinzip gilt unabhängig von der Rolle.</p>
+
+<% if (msg) { %><div class="alert success"><%= msg %></div><% } %>
+
+<div class="card">
+  <h3 style="margin-top:0">Neuen Benutzer einladen</h3>
+  <form method="post" action="/users">
+    <div class="row">
+      <div><label>Name</label><input type="text" name="name" required /></div>
+      <div><label>E-Mail</label><input type="email" name="email" required /></div>
+      <div><label>Rolle</label>
+        <select name="role">
+          <option value="bearbeiter">Bearbeiter</option>
+          <option value="pruefer">Prüfer</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+    </div>
+    <button type="submit" style="margin-top:12px">Benutzer anlegen</button>
+  </form>
+</div>
+
+<table>
+  <thead><tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th></th></tr></thead>
+  <tbody>
+  <% users.forEach(function(u) { %>
+    <tr>
+      <td><%= u.name %></td>
+      <td><%= u.email %></td>
+      <td>
+        <form method="post" action="/users/<%= u.id %>/role">
+          <select name="role" onchange="this.form.submit()">
+            <% ['bearbeiter','pruefer','admin'].forEach(function(r) { %>
+              <option value="<%= r %>" <%= u.role===r?'selected':'' %>><%= r %></option>
+            <% }) %>
+          </select>
+        </form>
+      </td>
+      <td>
+        <form method="post" action="/users/<%= u.id %>/reset-password" class="inline">
+          <button type="submit" class="secondary">Passwort zurücksetzen</button>
+        </form>
+        <% if (u.id !== user.id) { %>
+        <form method="post" action="/users/<%= u.id %>/delete" class="inline" onsubmit="return confirm('Benutzer wirklich löschen?')">
+          <button type="submit" class="danger">Löschen</button>
+        </form>
+        <% } %>
+      </td>
+    </tr>
+  <% }) %>
+  </tbody>
+</table>
+<%- include('partials/foot') %>

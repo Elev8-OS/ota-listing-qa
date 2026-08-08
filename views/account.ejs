@@ -1,0 +1,18 @@
+<%- include('partials/head', { title: 'Konto', user }) %>
+<h1>Mein Konto</h1>
+<p class="subtitle"><%= user.name %> · <%= user.email %> · Rolle: <%= user.role %></p>
+<% if (msg) { %><div class="alert success"><%= msg %></div><% } %>
+<% if (error) { %><div class="alert error"><%= error %></div><% } %>
+<% if (user.must_change_password) { %>
+  <div class="alert info">Dein Passwort wurde von einem Admin zurückgesetzt. Bitte setze jetzt ein neues Passwort.</div>
+<% } %>
+<div class="card" style="max-width:420px">
+  <form method="post" action="/account/password">
+    <label>Aktuelles Passwort</label>
+    <input type="password" name="current_password" required />
+    <label>Neues Passwort</label>
+    <input type="password" name="new_password" required minlength="8" />
+    <button type="submit" style="margin-top:12px">Passwort ändern</button>
+  </form>
+</div>
+<%- include('partials/foot') %>
