@@ -17,7 +17,7 @@ freigegeben werden (Vier-Augen-Prinzip), bevor sie als umgesetzt markiert wird.
 3. Zimmer mit Schlafgelegenheit im Fotorundgang, das im separaten Bereich
    "Schlafgelegenheiten" fehlt
 4. Hinterlegter Bettentyp pro Zimmer vs. Bettentyp, der auf den Fotos zu sehen ist
-5. Gesamte Schlafkapazität vs. maximale Gästezahl
+5. Gesamte Schlafkapazität vs. maximale Gäستezahl
 
 ## Datenimport aus dem OTA-Link (Playwright, live von Airbnb/Booking.com)
 
@@ -34,12 +34,12 @@ sichtbaren Zusammenfassungstext) sowie roh der Textblock unter
 — letzterer wird zum manuellen Abgleich mit den unten erfassten Zimmern
 angezeigt, ersetzt diese aber nicht automatisch.
 
-**Nach wie vor nicht auslesbar** (bewusste Einschränkung, nicht technisch
-lösbar ohne Host-Login): die Editor-internen Felder "Fotorundgang"
+**Nach wie vor nicht auslesbar über den öffentlichen Scraper** (Airbnb blockt
+den Headless-Zugriff teilweise; siehe nächster Abschnitt für die Lösung
+per Chrome-Extension): die Editor-internen Felder "Fotorundgang"
 (Zuordnung der Fotos zu Zimmerkategorien) und ob ein Zimmer im separaten
 Bereich "Schlafgelegenheiten" hinterlegt ist. Genau das war der ursprüngliche
-Fehler, den dieses Tool aufdecken soll — diese Felder bleiben daher immer
-manuell zu erfassen.
+Fehler, den dieses Tool aufdecken soll.
 
 **Bot-Schutz:** Erkennt der Scraper eine Verifizierungs-/Captcha-Seite, bricht
 er sauber ab und meldet das — es wird nicht versucht, Bot-Schutz zu umgehen.
@@ -47,6 +47,32 @@ er sauber ab und meldet das — es wird nicht versucht, Bot-Schutz zu umgehen.
 **Hinweis zur Zuverlässigkeit:** Airbnb/Booking.com können ihre Seitenstruktur
 jederzeit ändern oder automatisierte Zugriffe erschweren; jeder importierte
 Wert ist als "bitte prüfen" zu behandeln, nie blind zu übernehmen.
+
+## Airbnb-Host-Editor-Import per Chrome-Extension
+
+Der Playwright-Scraper (oben) wird bei Airbnb teilweise von Bot-Schutz
+blockiert, weil er auf der öffentlichen Seite läuft. Als Alternative gibt es
+`browser-extension/` — eine kleine Chrome-Extension, die im echten,
+eingeloggten Chrome der Person läuft (kein Bot-Schutz-Thema, da echte
+menschliche Session) und dabei zusätzlich Zugriff auf Host-interne
+Editor-Felder hat (Fotorundgang-Zimmerliste, "Sleeping arrangements") — genau
+die Felder, die öffentlich nie sichtbar waren. Details und Installation:
+siehe `browser-extension/README.md`.
+
+Voraussetzung im QA-Tool:
+
+- Umgebungsvariable `EXTENSION_API_KEY` setzen (beliebiger langer, zufälliger
+  String) — ohne diese Variable ist der Endpunkt `/api/browser-import`
+  deaktiviert.
+- Bei jedem Airbnb-Kanal die "Airbnb Listing-ID" hinterlegen (Feld im
+  Kanal-Bereich), damit die Extension weiss, welchen Kanal sie aktualisieren
+  soll.
+
+Sicherheitshinweis: Der API-Key ist ein reiner Freigabe-Mechanismus zwischen
+Extension und QA-Tool, kein Ersatz für Airbnb-Zugangsdaten — die Extension
+nutzt ausschliesslich die bereits bestehende, legitime Browser-Session der
+Person. Es wird nie versucht, sich anderswo einzuloggen oder Bot-/Captcha-Schutz
+zu umgehen.
 
 ## Rollen
 
@@ -93,6 +119,7 @@ Benötigte Umgebungsvariablen:
 - `NODE_ENV=production`
 - `DEV_LOGIN_ENABLED` – optional, Standard: aktiv (nicht gesetzt oder alles außer
   `"false"`). Siehe Abschnitt "Dev-Login" unten.
+- `EXTENSION_API_KEY` – optional, für die Chrome-Extension (siehe oben).
 
 ## Dev-Login (ohne Passwort)
 
