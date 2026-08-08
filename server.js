@@ -8,6 +8,7 @@ const db = require("./db");
 const { computeFindings } = require("./lib/checks");
 const { fetchLiveOtaData } = require("./lib/otaScraper");
 const { applyBrowserImport } = require("./lib/browserImport");
+const { mergeTextFields, parseTextFields } = require("./lib/textFields");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -207,7 +208,11 @@ app.get("/listings/:id", requireAuth, (req, res) => {
     const proposals = withUserNames(
       db.prepare("SELECT * FROM proposals WHERE channel_id = ? ORDER BY created_at DESC").all(ch.id)
     );
-    return { ...ch, rooms, findings, proposals };
+    const textFieldsByPath = parseTextFields(ch.text_fields);
+    const proposedTargets = new Set(
+      proposals.filter((p) => p.target_field_id).map((p) => p.target_path + "::" + p.target_field_id)
+    );
+    return { ...ch, rooms, findings, proposals, textFieldsByPath, proposedTargets };
   });
   const role = req.currentUser.role;
   res.render("listing", {
@@ -330,20 +335,36 @@ app.get("/api/browser-import/ping", requireExtensionApiKey, (req, res) => {
   res.json({ ok: true, app: "ota-qa-tool" });
 });
 
+function findChannelByExternalId(platform, external_id) {
+  return db.prepare("SELECT * FROM channels WHERE platform = ? AND external_id = ?").get(platform, String(external_id));
+}
+
 app.post("/api/browser-import", requireExtensionApiKey, (req, res) => {
   const { platform, external_id, fields } = req.body || {};
   if (!platform || !external_id) {
     return res.status(400).json({ ok: false, error: "platform und external_id sind erforderlich." });
   }
-  const ch = db.prepare("SELECT * FROM channels WHERE platform = ? AND external_id = ?").get(platform, String(external_id));
+  const ch = findChannelByExternalId(platform, external_id);
   if (!ch) {
     return res.status(404).json({
       ok: false,
       error: `Kein Kanal mit platform=${platform} und external_id=${external_id} gefunden. Bitte im QA-Tool beim passenden Kanal die externe ID hinterlegen.`,
     });
   }
-  const result = applyBrowserImport(fields);
+  const result = applyBrowserImport(fields || {});
   const d = result.declared;
+
+  // Generische Text-Erfassung ("alle Texte im Inserat"): jedes <textarea>/
+  // <input> mit HTML-id, das die Extension auf der aktuellen Editor-Unterseite
+  // gefunden hat (fields.page = URL-Pfad, fields.rawTextInputs = [{id, value}]).
+  let textFieldsCount = 0;
+  let newTextFieldsJson = ch.text_fields;
+  if (fields && fields.page && Array.isArray(fields.rawTextInputs) && fields.rawTextInputs.length) {
+    newTextFieldsJson = mergeTextFields(ch.text_fields, fields.page, fields.rawTextInputs);
+    textFieldsCount = fields.rawTextInputs.length;
+  }
+  const ok = result.ok || textFieldsCount > 0;
+
   db.prepare(
     `UPDATE channels SET
        declared_bedrooms = COALESCE(?, declared_bedrooms),
@@ -352,11 +373,69 @@ app.post("/api/browser-import", requireExtensionApiKey, (req, res) => {
        declared_guests = COALESCE(?, declared_guests),
        live_sleeping_text = COALESCE(?, live_sleeping_text),
        live_source = CASE WHEN ? IS NOT NULL THEN 'extension' ELSE live_source END,
+       text_fields = ?,
        last_imported_at = datetime('now'),
        import_note = ?
      WHERE id = ?`
-  ).run(d.bedrooms, d.beds, d.bathrooms, d.guests, result.liveText, result.liveText, result.note, ch.id);
-  res.json({ ok: result.ok, channel_id: ch.id, listing_id: ch.listing_id, note: result.note });
+  ).run(
+    d.bedrooms,
+    d.beds,
+    d.bathrooms,
+    d.guests,
+    result.liveText,
+    result.liveText,
+    newTextFieldsJson,
+    textFieldsCount > 0 ? `${textFieldsCount} Textfeld(er) von "${fields.page}" gelesen. ${result.note}` : result.note,
+    ch.id
+  );
+  res.json({ ok, channel_id: ch.id, listing_id: ch.listing_id, note: result.note, textFieldsCount });
+});
+
+// ---------- Text-Vorschläge ("alle Texte im Inserat") ----------
+// Jedes erfasste Textfeld (siehe oben) kann als Vier-Augen-Vorschlag
+// eingereicht werden — genau wie die automatisch erkannten Befunde weiter
+// unten, nur dass der Ausgangstext hier eine freie Umformulierung ist
+// (von Hand oder mit KI-Unterstützung entworfen) statt eines Konsistenz-Fixes.
+app.post("/channels/:id/propose-text", requireRole("admin", "bearbeiter"), (req, res) => {
+  const { path: targetPath, field_id, proposed_text, label } = req.body;
+  if (!targetPath || !field_id || !proposed_text) {
+    return res.status(400).send("Pfad, Feld-ID und Text sind erforderlich.");
+  }
+  db.prepare(
+    `INSERT INTO proposals (channel_id, finding_key, title, proposed_text, proposed_by, target_path, target_field_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    req.params.id,
+    `text:${targetPath}::${field_id}`,
+    label || `Text: ${field_id}`,
+    proposed_text,
+    req.currentUser.id,
+    targetPath,
+    field_id
+  );
+  res.redirect("/listings/" + getListingIdForChannel(req.params.id));
+});
+
+// Von der Extension abgefragt: welche freigegebenen Text-Vorschläge warten
+// noch darauf, in Airbnb eingetragen zu werden? Optional nach aktuellem
+// Editor-Pfad gefiltert, damit die Extension nur das einfüllt, was auf der
+// gerade offenen Seite überhaupt existiert.
+app.get("/api/browser-import/pending-writeback", requireExtensionApiKey, (req, res) => {
+  const { platform, external_id, path: currentPath } = req.query;
+  if (!platform || !external_id) {
+    return res.status(400).json({ ok: false, error: "platform und external_id sind erforderlich." });
+  }
+  const ch = findChannelByExternalId(platform, external_id);
+  if (!ch) {
+    return res.status(404).json({ ok: false, error: "Kein passender Kanal gefunden." });
+  }
+  let rows = db
+    .prepare(
+      "SELECT id, target_path, target_field_id, proposed_text, title FROM proposals WHERE channel_id = ? AND status = 'freigegeben' AND target_field_id IS NOT NULL"
+    )
+    .all(ch.id);
+  if (currentPath) rows = rows.filter((r) => r.target_path === currentPath);
+  res.json({ ok: true, items: rows });
 });
 
 app.post("/channels/:id/rooms", requireAuth, (req, res) => {
