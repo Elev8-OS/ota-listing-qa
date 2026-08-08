@@ -1,30 +1,3 @@
-// Läuft auf jeder Airbnb-Host-Editor-Seite (echte, eingeloggte Session der
-// Person). Liest:
-//   1) auf der Fotorundgang-Seite die Felder, die öffentlich nie sichtbar
-//      sind (Fotorundgang-Zimmerliste, Sleeping arrangements) per Text-
-//      Heuristik aus document.body.innerText.
-//   2) auf JEDER Editor-Unterseite (Title, Description-Unterpanels wie
-//      "Listing description"/"Your property", ...) generisch alle
-//      <textarea>/<input type=text>-Felder mit HTML-id ("alle Texte im
-//      Inserat"). Diese generische Erfassung ist bewusst nicht auf
-//      bestimmte Felder hartkodiert, weil Airbnb viele solcher Textfelder
-//      hat und sich deren ids/Struktur ändern können.
-//   3) auf der Fotoraum-Übersicht (z. B. .../photo-tour/<raum-id>, die Seite
-//      mit dem Foto-Grid eines Raums) auf Wunsch automatisch jedes Foto
-//      dieses Raums: klickt nacheinander jedes Foto auf, liest dessen
-//      Editor-Pfad (enthält die feste Foto-ID) + Bild-URL aus und klickt
-//      wieder zurück zum Grid — schickt dann alle gesammelten Fotos ans
-//      QA-Tool, das per Claude-Vision einen Alt-Text-Vorschlag ("visual
-//      description") pro Foto erzeugt. Es wird dabei nirgends "Save"
-//      geklickt oder ein Airbnb-Feld verändert — nur geklickt, um zur
-//      jeweiligen Foto-Detailseite zu navigieren und wieder zurück.
-// Schickt (1)+(2) und (3) an den Hintergrundprozess, der es ans QA-Tool
-// weiterleitet. Ein weiterer Button liest freigegebene Text-Vorschläge vom
-// QA-Tool und trägt sie (nur) ins jeweilige Feld ein — Speichern in Airbnb
-// bleibt bewusst ein manueller Schritt der Person.
-//
-// Es wird nichts auf airbnb.com automatisch gespeichert/abgeschickt.
-
 (function () {
   function extractListingId() {
     const m = location.pathname.match(/\/hosting\/listings\/editor\/(\d+)/);
@@ -131,8 +104,23 @@
   }
 
   function getRoomLabel() {
-    const h = document.querySelector("h1, h2");
-    return h ? h.textContent.trim() : null;
+    // WICHTIG: Nicht einfach das erste h1/h2 nehmen — die Raum-Detailseite
+    // hat ZUSÄTZLICH zum sichtbaren Raumnamen (z. B. "Dining area") ein
+    // global-verstecktes <h1>Listing editor</h1> (rect 0,0) UND ein
+    // sichtbares <h1>Photo tour</h1> VOR dem eigentlichen Raum-<h2> im DOM.
+    // document.querySelector("h1, h2") matchte deshalb live immer
+    // "Listing editor" statt des Raumnamens (Bug, live gefunden). Jetzt:
+    // über alle Überschriften iterieren, bekannte statische Seitentitel
+    // überspringen und nur eine tatsächlich sichtbare (Breite/Höhe > 0)
+    // Überschrift zurückgeben.
+    const headings = [...document.querySelectorAll("h1, h2, h3")];
+    for (const h of headings) {
+      const text = h.textContent.trim();
+      if (!text || text === "Listing editor" || text === "Photo tour") continue;
+      const r = h.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) return text;
+    }
+    return null;
   }
 
   function findRoomThumbnails() {
@@ -150,7 +138,13 @@
   }
 
   function upscaleImageUrl(src) {
-    return src.replace(/im_w=\d+/, "im_w=1280");
+    // WICHTIG: Airbnbs Bild-CDN (muscache.com) liefert nur eine feste Liste
+    // erlaubter im_w-Breiten aus — live per direktem HTTP-Test geprüft:
+    // 240/480/720/960 -> 200 OK, aber 640/750/800/1024/1080/1280 -> 404.
+    // 1280 (der alte Wert hier) 404t deshalb immer, wodurch der Alt-Text-Scan
+    // nie ein Bild laden konnte (Bug, live gefunden). 960 ist die höchste
+    // bestätigt funktionierende Breite.
+    return src.replace(/im_w=\d+/, "im_w=960");
   }
 
   // Klickt nacheinander jedes Foto im aktuellen Raum-Grid auf, liest dessen
