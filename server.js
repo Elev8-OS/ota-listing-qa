@@ -7,6 +7,7 @@ const bcrypt = require("bcryptjs");
 const db = require("./db");
 const { computeFindings } = require("./lib/checks");
 const { fetchLiveOtaData } = require("./lib/otaScraper");
+const { applyBrowserImport } = require("./lib/browserImport");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -14,6 +15,7 @@ app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 app.use(
   session({
@@ -269,6 +271,7 @@ app.post("/channels/:id/import", requireAuth, async (req, res) => {
        declared_bathrooms = COALESCE(?, declared_bathrooms),
        declared_guests = COALESCE(?, declared_guests),
        live_sleeping_text = COALESCE(?, live_sleeping_text),
+       live_source = CASE WHEN ? IS NOT NULL THEN 'scraper' ELSE live_source END,
        last_imported_at = datetime('now'),
        import_note = ?
      WHERE id = ?`
@@ -277,6 +280,7 @@ app.post("/channels/:id/import", requireAuth, async (req, res) => {
     f.beds ?? null,
     f.bathrooms ?? null,
     f.guests ?? null,
+    f.sleepingArrangementRaw ?? null,
     f.sleepingArrangementRaw ?? null,
     result.note,
     ch.id
@@ -291,6 +295,68 @@ app.post("/channels/:id/import", requireAuth, async (req, res) => {
           : "Import ausgeführt, aber es konnten keine Felder gelesen werden (siehe Hinweis beim Kanal unten)."
       )
   );
+});
+
+app.post("/channels/:id/external-id", requireAuth, (req, res) => {
+  const ch = db.prepare("SELECT * FROM channels WHERE id = ?").get(req.params.id);
+  if (!ch) return res.status(404).send("Kanal nicht gefunden.");
+  db.prepare("UPDATE channels SET external_id = ? WHERE id = ?").run(
+    (req.body.external_id || "").trim() || null,
+    ch.id
+  );
+  res.redirect("/listings/" + ch.listing_id);
+});
+
+// ---------- Browser-Extension-Import (echter, eingeloggter Host-Browser) ----------
+// Die QA-Tool-Chrome-Extension läuft in der eigenen, bereits eingeloggten
+// Airbnb-Session der Person (siehe README) und sendet die im Host-Editor
+// sichtbaren Felder hierher. Authentifizierung erfolgt NICHT über die normale
+// Session/Cookies (die Extension läuft auf airbnb.com, nicht auf dieser App),
+// sondern über einen gemeinsamen API-Key in der Umgebungsvariable
+// EXTENSION_API_KEY. Ohne gesetzten Key ist dieser Endpunkt deaktiviert.
+function requireExtensionApiKey(req, res, next) {
+  const expected = process.env.EXTENSION_API_KEY;
+  if (!expected) {
+    return res.status(503).json({ ok: false, error: "Browser-Extension-Import ist nicht konfiguriert (EXTENSION_API_KEY fehlt)." });
+  }
+  const provided = req.get("X-API-Key") || "";
+  if (provided !== expected) {
+    return res.status(401).json({ ok: false, error: "Ungültiger oder fehlender API-Key." });
+  }
+  next();
+}
+
+app.get("/api/browser-import/ping", requireExtensionApiKey, (req, res) => {
+  res.json({ ok: true, app: "ota-qa-tool" });
+});
+
+app.post("/api/browser-import", requireExtensionApiKey, (req, res) => {
+  const { platform, external_id, fields } = req.body || {};
+  if (!platform || !external_id) {
+    return res.status(400).json({ ok: false, error: "platform und external_id sind erforderlich." });
+  }
+  const ch = db.prepare("SELECT * FROM channels WHERE platform = ? AND external_id = ?").get(platform, String(external_id));
+  if (!ch) {
+    return res.status(404).json({
+      ok: false,
+      error: `Kein Kanal mit platform=${platform} und external_id=${external_id} gefunden. Bitte im QA-Tool beim passenden Kanal die externe ID hinterlegen.`,
+    });
+  }
+  const result = applyBrowserImport(fields);
+  const d = result.declared;
+  db.prepare(
+    `UPDATE channels SET
+       declared_bedrooms = COALESCE(?, declared_bedrooms),
+       declared_beds = COALESCE(?, declared_beds),
+       declared_bathrooms = COALESCE(?, declared_bathrooms),
+       declared_guests = COALESCE(?, declared_guests),
+       live_sleeping_text = COALESCE(?, live_sleeping_text),
+       live_source = CASE WHEN ? IS NOT NULL THEN 'extension' ELSE live_source END,
+       last_imported_at = datetime('now'),
+       import_note = ?
+     WHERE id = ?`
+  ).run(d.bedrooms, d.beds, d.bathrooms, d.guests, result.liveText, result.liveText, result.note, ch.id);
+  res.json({ ok: result.ok, channel_id: ch.id, listing_id: ch.listing_id, note: result.note });
 });
 
 app.post("/channels/:id/rooms", requireAuth, (req, res) => {
