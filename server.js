@@ -1,8 +1,10 @@
 const path = require("path");
+const fs = require("fs");
 const crypto = require("crypto");
 const express = require("express");
 const session = require("express-session");
 const bcrypt = require("bcryptjs");
+const archiver = require("archiver");
 
 const db = require("./db");
 const { computeFindings } = require("./lib/checks");
@@ -167,6 +169,43 @@ app.post("/dev-login/:id", (req, res) => {
 
 app.post("/logout", (req, res) => {
   req.session.destroy(() => res.redirect("/login"));
+});
+
+// ---------- Browser-Extension (Info + Download) ----------
+// Zip wird bei jedem Aufruf frisch aus browser-extension/ im Repo gepackt
+// (kein separater Build-Schritt, kein "Zip vergessen zu aktualisieren" mehr
+// möglich) — Version/Autor/Changelog kommen direkt aus manifest.json bzw.
+// CHANGELOG.md, damit diese Seite nie vom tatsächlichen Code abweicht.
+const EXTENSION_DIR = path.join(__dirname, "browser-extension");
+
+function getExtensionManifest() {
+  return JSON.parse(fs.readFileSync(path.join(EXTENSION_DIR, "manifest.json"), "utf8"));
+}
+
+app.get("/extension", requireAuth, (req, res) => {
+  const manifest = getExtensionManifest();
+  let changelog = "";
+  try {
+    changelog = fs.readFileSync(path.join(EXTENSION_DIR, "CHANGELOG.md"), "utf8");
+  } catch (e) {
+    changelog = "(kein CHANGELOG.md gefunden)";
+  }
+  res.render("extension", { version: manifest.version, changelog });
+});
+
+app.get("/extension/download", requireAuth, (req, res) => {
+  const manifest = getExtensionManifest();
+  res.attachment(`ota-qa-tool-browser-extension-v${manifest.version}.zip`);
+  const archive = archiver("zip", { zlib: { level: 9 } });
+  archive.on("error", (err) => {
+    // Header evtl. schon gesendet (Streaming) - dann nur noch Verbindung beenden.
+    if (!res.headersSent) res.status(500);
+    res.end();
+    console.error("Extension-Zip-Fehler:", err);
+  });
+  archive.pipe(res);
+  archive.directory(EXTENSION_DIR, false);
+  archive.finalize();
 });
 
 // ---------- dashboard ----------
@@ -357,7 +396,8 @@ app.post("/api/browser-import", requireExtensionApiKey, (req, res) => {
        live_source = CASE WHEN ? IS NOT NULL THEN 'extension' ELSE live_source END,
        text_fields = ?,
        last_imported_at = datetime('now'),
-       import_note = ?
+       import_note = ?,
+       last_extension_version = COALESCE(?, last_extension_version)
      WHERE id = ?`
   ).run(
     d.bedrooms,
@@ -368,6 +408,7 @@ app.post("/api/browser-import", requireExtensionApiKey, (req, res) => {
     result.liveText,
     newTextFieldsJson,
     textFieldsCount > 0 ? `${textFieldsCount} Textfeld(er) von "${fields.page}" gelesen. ${result.note}` : result.note,
+    req.body && req.body.extension_version ? String(req.body.extension_version) : null,
     ch.id
   );
   res.json({ ok, channel_id: ch.id, listing_id: ch.listing_id, note: result.note, textFieldsCount });
