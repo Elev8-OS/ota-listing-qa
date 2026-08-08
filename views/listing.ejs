@@ -108,12 +108,16 @@
           <div class="muted"><%= fieldId %><% if (already) { %> · <span class="status-pill">bereits vorgeschlagen</span><% } %></div>
           <div style="white-space:pre-wrap;font-size:0.95em;margin:4px 0"><%= currentValue %></div>
           <% if (canPropose) { %>
-          <form method="post" action="/channels/<%= ch.id %>/propose-text">
+          <form method="post" action="/channels/<%= ch.id %>/propose-text" class="text-propose-form" data-channel-id="<%= ch.id %>" data-path="<%= path %>" data-field-id="<%= fieldId %>">
             <input type="hidden" name="path" value="<%= path %>" />
             <input type="hidden" name="field_id" value="<%= fieldId %>" />
             <input type="hidden" name="label" value="Text: <%= fieldId %>" />
-            <textarea name="proposed_text"><%= currentValue %></textarea>
-            <button type="submit" style="margin-top:6px" class="secondary">Umformulierung als Vorschlag einreichen</button>
+            <textarea name="proposed_text" class="ai-rewrite-target"><%= currentValue %></textarea>
+            <div class="row" style="margin-top:6px;align-items:center">
+              <button type="button" class="secondary ai-rewrite-btn">Mit KI umformulieren</button>
+              <button type="submit" class="secondary">Umformulierung als Vorschlag einreichen</button>
+              <span class="muted ai-rewrite-status" style="display:none"></span>
+            </div>
           </form>
           <% } %>
         </div>
@@ -265,4 +269,41 @@
   <% }) %>
 </div>
 <% }) %>
+
+<script>
+  // "Mit KI umformulieren": ruft /channels/:id/ai-rewrite auf und ersetzt
+  // nur den Inhalt des zugehörigen Textfelds im Vorschlags-Formular — nichts
+  // wird automatisch abgeschickt, die Person prüft/bearbeitet den Vorschlag
+  // vor dem Einreichen weiterhin selbst.
+  document.querySelectorAll('.text-propose-form').forEach(function (form) {
+    var btn = form.querySelector('.ai-rewrite-btn');
+    var textarea = form.querySelector('.ai-rewrite-target');
+    var status = form.querySelector('.ai-rewrite-status');
+    if (!btn || !textarea) return;
+    btn.addEventListener('click', function () {
+      status.style.display = 'inline';
+      status.textContent = 'KI überarbeitet den Text …';
+      btn.disabled = true;
+      fetch('/channels/' + form.dataset.channelId + '/ai-rewrite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: form.dataset.path, field_id: form.dataset.fieldId }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          btn.disabled = false;
+          if (data.ok) {
+            textarea.value = data.text;
+            status.textContent = 'Vorschlag eingefügt (Modell: ' + data.model + ') — bitte prüfen, ggf. anpassen, dann einreichen.';
+          } else {
+            status.textContent = 'Fehler: ' + (data.error || 'unbekannt');
+          }
+        })
+        .catch(function (err) {
+          btn.disabled = false;
+          status.textContent = 'Fehler: ' + err;
+        });
+    });
+  });
+</script>
 <%- include('partials/foot') %>

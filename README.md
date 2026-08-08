@@ -89,13 +89,27 @@ Editor-Seite eingetragen werden, von der es stammt. Gespeichert wird in
 Airbnb weiterhin nur manuell durch die Person selbst — die Extension füllt
 das Feld, klickt aber nie Airbnbs eigenen "Save"-Button.
 
-Die eigentliche KI-Umformulierung (automatisches Neuschreiben des erfassten
-Texts) ist im QA-Tool aktuell **nicht** als eigener "KI-Button" eingebaut —
-das Vorschlagsfeld ist ein normales, vorausgefülltes Textfeld, in das eine
-von aussen (z. B. mit ChatGPT/Claude) erstellte Umformulierung eingefügt
-werden kann, bevor sie zur Freigabe eingereicht wird. Eine direkte
-LLM-Anbindung im Tool selbst wäre ein zusätzlicher Schritt (eigener API-Key,
-Kosten) und wurde bewusst nicht ohne Rückfrage ergänzt.
+Direkt neben jedem erfassten Text gibt es zusätzlich einen Button "Mit KI
+umformulieren" (`lib/aiRewrite.js`, Route `/channels/:id/ai-rewrite`), der
+per Claude-API (Anthropic Messages API, direkter `fetch`-Aufruf, kein SDK)
+einen Vorschlag erzeugt und ins Vorschlagsfeld einträgt — nichts wird
+automatisch übernommen oder eingereicht, die Person prüft/bearbeitet den
+KI-Vorschlag weiterhin selbst, bevor sie ihn zur Vier-Augen-Freigabe
+einreicht. Als Kontext bekommt Claude die Eckdaten des Kanals (Schlafzimmer/
+Betten/Bäder/Gäste) sowie die anderen bereits erfassten Texte desselben
+Inserats mit, damit die Umformulierung nicht widersprüchlich wird.
+
+Benötigte Umgebungsvariable: `ANTHROPIC_API_KEY` (Anthropic-Konto/API-Key,
+kostenpflichtig je Aufruf — ohne diese Variable meldet der Button einen
+klaren Fehler, es passiert aber nichts Kaputtes). Optional anpassbar, jeweils
+ohne Code-Änderung, nur per Railway-Variable:
+
+- `AI_REWRITE_SYSTEM_PROMPT` — der eigentliche Prompt/die Persona. Ohne
+  gesetzte Variable wird ein neutraler Standard-Prompt verwendet (siehe
+  `DEFAULT_SYSTEM_PROMPT` in `lib/aiRewrite.js`). Hier den eigenen,
+  ausführlicheren Prompt eintragen, sobald er feststeht.
+- `AI_REWRITE_MODEL` — Claude-Modellname, falls nicht das Standardmodell
+  verwendet werden soll (Default: `claude-3-5-sonnet-latest`).
 
 ## Rollen
 
