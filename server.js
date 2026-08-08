@@ -74,6 +74,13 @@ function requireRole(...roles) {
   };
 }
 
+function devLoginEnabled() {
+  // Standardmässig AN (Wunsch: sofortiger Zugriff ohne Passwort, auch produktiv).
+  // Zum Deaktivieren in Railway die Variable DEV_LOGIN_ENABLED auf "false" setzen
+  // (kein Redeploy nötig).
+  return process.env.DEV_LOGIN_ENABLED !== "false";
+}
+
 function genPassword() {
   return crypto.randomBytes(9).toString("base64").replace(/[+/=]/g, "").slice(0, 12);
 }
@@ -116,15 +123,39 @@ app.post("/setup", (req, res) => {
 
 app.get("/login", (req, res) => {
   if (req.currentUser) return res.redirect("/");
-  res.render("login", { error: null });
+  const devUsers = devLoginEnabled()
+    ? db.prepare("SELECT id, name, email, role FROM users ORDER BY created_at").all()
+    : [];
+  res.render("login", { error: null, devLoginEnabled: devLoginEnabled(), devUsers });
 });
 
 app.post("/login", (req, res) => {
   const { email, password } = req.body;
   const u = db.prepare("SELECT * FROM users WHERE email = ?").get((email || "").toLowerCase().trim());
   if (!u || !bcrypt.compareSync(password || "", u.password_hash)) {
-    return res.render("login", { error: "E-Mail oder Passwort ist falsch." });
+    return res.render("login", {
+      error: "E-Mail oder Passwort ist falsch.",
+      devLoginEnabled: devLoginEnabled(),
+      devUsers: devLoginEnabled()
+        ? db.prepare("SELECT id, name, email, role FROM users ORDER BY created_at").all()
+        : [],
+    });
   }
+  req.session.userId = u.id;
+  res.redirect("/");
+});
+
+// ---------- Dev-Login (ohne Passwort) ----------
+// ACHTUNG: Auf Wunsch aktiv erlaubt, auch auf der produktiven App. Jede Person,
+// die die URL kennt, kann sich damit ohne Passwort als beliebiger bestehender
+// Benutzer anmelden. Deaktivierbar über die Umgebungsvariable
+// DEV_LOGIN_ENABLED=false (siehe README).
+app.post("/dev-login/:id", (req, res) => {
+  if (!devLoginEnabled()) {
+    return res.status(403).send("Dev-Login ist deaktiviert.");
+  }
+  const u = getUserById(req.params.id);
+  if (!u) return res.status(404).send("Benutzer nicht gefunden.");
   req.session.userId = u.id;
   res.redirect("/");
 });

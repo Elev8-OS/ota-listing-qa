@@ -59,3 +59,22 @@ Benötigte Umgebungsvariablen:
 - `SESSION_SECRET` – beliebiger langer, zufälliger String
 - `DATA_DIR` – Pfad zum gemounteten Volume, z. B. `/data`
 - `NODE_ENV=production`
+- `DEV_LOGIN_ENABLED` – optional, Standard: aktiv (nicht gesetzt oder alles außer
+  `"false"`). Siehe Abschnitt "Dev-Login" unten.
+
+## Dev-Login (ohne Passwort)
+
+Auf der Login-Seite gibt es zusätzlich zum normalen E-Mail/Passwort-Login pro
+bestehendem Benutzer einen Button "Als … anmelden", der ohne Passwort direkt
+einloggt.
+
+**Sicherheitshinweis:** Dieser Zugang ist bewusst auch auf der produktiven
+App aktiv. Das bedeutet: **jede Person, die die App-URL kennt, kann sich ohne
+Passwort als beliebiger bestehender Benutzer (inkl. Admin) anmelden** — der
+normale Login-Schutz ist damit für alle, die die URL kennen, wirkungslos.
+Das Vier-Augen-Prinzip innerhalb der App (kein Freigeben eigener Vorschläge)
+bleibt zwar bestehen, aber der Zugangsschutz selbst ist deaktiviert.
+
+Deaktivieren ohne Redeploy: Umgebungsvariable `DEV_LOGIN_ENABLED=false` in
+Railway setzen (Variable ändern → Service startet automatisch neu). Danach
+ist nur noch der normale E-Mail/Passwort-Login möglich.

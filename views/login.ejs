@@ -10,5 +10,20 @@
     <input type="password" name="password" required />
     <button type="submit" style="margin-top:16px">Anmelden</button>
   </form>
+
+  <% if (devLoginEnabled && devUsers && devUsers.length) { %>
+  <div class="dev-login-block" style="margin-top:24px; padding-top:16px; border-top:1px dashed #999;">
+    <p class="subtitle" style="margin-bottom:8px;">
+      Dev-Login (ohne Passwort) — nur zum schnellen Zugriff, nicht für Produktivbetrieb empfohlen
+    </p>
+    <% devUsers.forEach(function(u) { %>
+      <form method="post" action="/dev-login/<%= u.id %>" style="display:inline-block; margin:4px 4px 0 0;">
+        <button type="submit" class="secondary">
+          Als <%= u.name %> (<%= u.role %>) anmelden
+        </button>
+      </form>
+    <% }) %>
+  </div>
+  <% } %>
 </div>
 <%- include('partials/foot') %>
