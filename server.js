@@ -10,6 +10,7 @@ const { fetchLiveOtaData } = require("./lib/otaScraper");
 const { applyBrowserImport } = require("./lib/browserImport");
 const { mergeTextFields, parseTextFields } = require("./lib/textFields");
 const { extractAirbnbListingId } = require("./lib/airbnbUrl");
+const { rewriteText } = require("./lib/aiRewrite");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -433,6 +434,42 @@ app.post("/channels/:id/propose-text", requireRole("admin", "bearbeiter"), (req,
     field_id
   );
   res.redirect("/listings/" + getListingIdForChannel(req.params.id));
+});
+
+// KI-Umformulierung eines erfassten Textfelds. Nutzt den aktuellen Text plus
+// Kontext (Eckdaten, andere bereits erfasste Texte desselben Kanals) — der
+// eigentliche Prompt/die Persona kommt (bis auf Weiteres ein neutraler
+// Standard-Prompt) aus lib/aiRewrite.js bzw. der Umgebungsvariable
+// AI_REWRITE_SYSTEM_PROMPT. Liefert nur einen Vorschlag zurück, ändert nichts
+// an der Datenbank oder an Airbnb — die Person prüft/bearbeitet den Vorschlag
+// im Textfeld, bevor sie ihn zur Vier-Augen-Freigabe einreicht.
+app.post("/channels/:id/ai-rewrite", requireRole("admin", "bearbeiter"), async (req, res) => {
+  const ch = db.prepare("SELECT * FROM channels WHERE id = ?").get(req.params.id);
+  if (!ch) return res.status(404).json({ ok: false, error: "Kanal nicht gefunden." });
+  const { path: targetPath, field_id } = req.body || {};
+  if (!targetPath || !field_id) {
+    return res.status(400).json({ ok: false, error: "Pfad und Feld-ID sind erforderlich." });
+  }
+  const allFields = parseTextFields(ch.text_fields);
+  const currentText = (allFields[targetPath] || {})[field_id];
+  if (currentText === undefined) {
+    return res.status(404).json({ ok: false, error: "Dieses Textfeld wurde nicht (mehr) erfasst." });
+  }
+  const otherFields = [];
+  Object.keys(allFields).forEach((p) => {
+    Object.keys(allFields[p]).forEach((fid) => {
+      if (p === targetPath && fid === field_id) return;
+      otherFields.push({ path: p, fieldId: fid, value: allFields[p][fid] });
+    });
+  });
+  const result = await rewriteText({
+    channel: ch,
+    currentText,
+    currentPath: targetPath,
+    currentFieldId: field_id,
+    otherFields: otherFields.slice(0, 6),
+  });
+  res.json(result);
 });
 
 // Von der Extension abgefragt: welche freigegebenen Text-Vorschläge warten
