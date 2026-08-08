@@ -43,9 +43,16 @@
   function extractPhotoTourFields() {
     const text = document.body.innerText || "";
 
+    // WICHTIG: [\s\S]{0,60}? statt [^\n]*? zwischen den drei Zahlen — die
+    // Kopfzeile im Host-Editor rendert "3 bedrooms", "4 beds", "1 bath" als
+    // DREI EIGENE ZEILEN (nicht "3 bedrooms · 4 beds · 1 bath" auf einer
+    // Zeile wie auf der öffentlichen Seite). Mit [^\n]*? matchte das nie,
+    // Bettentyp/Schlafzimmer/Bäder blieben deshalb live immer auf 0 (Bug,
+    // live gefunden). Auf 60 Zeichen begrenzt, damit es nicht quer über die
+    // ganze Seite matcht.
     const summaryMatch =
-      text.match(/(\d+\s*bedrooms?[^\n]*?\d+\s*beds?[^\n]*?\d+(?:[.,]\d)?\s*baths?)/i) ||
-      text.match(/(\d+\s*Schlafzimmer[^\n]*?\d+\s*Betten[^\n]*?\d+(?:[.,]\d)?\s*Bad(?:ezimmer)?)/i);
+      text.match(/(\d+\s*bedrooms?[\s\S]{0,60}?\d+\s*beds?[\s\S]{0,60}?\d+(?:[.,]\d)?\s*baths?)/i) ||
+      text.match(/(\d+\s*Schlafzimmer[\s\S]{0,60}?\d+\s*Betten[\s\S]{0,60}?\d+(?:[.,]\d)?\s*Bad(?:ezimmer)?)/i);
     const bedroomsSummary = summaryMatch ? summaryMatch[1] : null;
 
     let guests = null;
@@ -63,8 +70,15 @@
         .split("\n")
         .map((l) => l.trim())
         .filter(Boolean);
+      // WICHTIG: Nur noch prüfen, ob lines[i+1] wie eine Betten-Zeile aussieht
+      // (beginnt mit einer Zahl, enthält "bed") — NICHT mehr verlangen, dass
+      // die Raum-Zeile lines[i] kein "bed" enthält. Airbnbs Standard-Namen
+      // sind "Bedroom 1", "Bedroom 2", ... — die enthalten selbst "bed", die
+      // alte Bedingung liess dadurch nie einen Treffer zu (Bug, live
+      // gefunden: Sleeping arrangements blieb bei Standard-Zimmernamen immer
+      // leer).
       for (let i = 0; i < lines.length - 1; i++) {
-        if (/bed/i.test(lines[i + 1]) && !/bed/i.test(lines[i])) {
+        if (/^\d+\s.*bed/i.test(lines[i + 1])) {
           sleepingArrangements.push({ room: lines[i], beds: lines[i + 1] });
           i++;
         }
