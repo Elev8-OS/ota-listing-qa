@@ -63,6 +63,9 @@
     </div>
     <button type="submit" class="secondary">Speichern</button>
   </form>
+  <% if (ch.mdv_synced_at) { %>
+  <p class="muted" style="margin-top:-6px">Zuletzt aus MyDataValue synchronisiert: <%= ch.mdv_synced_at %></p>
+  <% } %>
   <% } %>
 
   <% if (ch.import_note) { %>
