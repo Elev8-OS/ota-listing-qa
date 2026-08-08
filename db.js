@@ -117,4 +117,28 @@ try {
   if (!/duplicate column/i.test(e.message)) throw e;
 }
 
+// Migration: generische Text-Erfassung ("alle Texte im Inserat"). Die
+// Extension liest auf jeder Airbnb-Editor-Unterseite (Title, Description +
+// deren Unterpanels Listing description/Your property/Guest access/...) alle
+// vorhandenen <textarea>/<input>-Felder mit ihrer HTML-id aus. text_fields
+// speichert das als JSON: { "<Pfad, z.B. /details/description>": { "<id>": "<Wert>" } }.
+// Darauf bauen die neuen Text-Vorschläge auf (siehe proposals.target_path/
+// target_field_id) — Freigabe läuft über das bestehende Vier-Augen-Prinzip,
+// der Rückschreib-Schritt in Airbnb passiert wieder über die Extension.
+try {
+  db.exec("ALTER TABLE channels ADD COLUMN text_fields TEXT");
+} catch (e) {
+  if (!/duplicate column/i.test(e.message)) throw e;
+}
+for (const stmt of [
+  "ALTER TABLE proposals ADD COLUMN target_path TEXT",
+  "ALTER TABLE proposals ADD COLUMN target_field_id TEXT",
+]) {
+  try {
+    db.exec(stmt);
+  } catch (e) {
+    if (!/duplicate column/i.test(e.message)) throw e;
+  }
+}
+
 module.exports = db;
