@@ -13,6 +13,7 @@ const { mergeTextFields, parseTextFields } = require("./lib/textFields");
 const { extractAirbnbListingId } = require("./lib/airbnbUrl");
 const { rewriteText } = require("./lib/aiRewrite");
 const { describeImage } = require("./lib/aiVision");
+const { listAllAirbnbListings } = require("./lib/mdv");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -235,6 +236,54 @@ app.post("/listings", requireAuth, (req, res) => {
     .prepare("INSERT INTO listings (name, note, created_by) VALUES (?, ?, ?)")
     .run(name, note || null, req.currentUser.id);
   res.redirect("/listings/" + info.lastInsertRowid);
+});
+
+// ---------- MyDataValue-Import ----------
+// Holt alle Airbnb-Listings aus MyDataValue (server-seitig, eigene
+// API-Zugangsdaten — siehe lib/mdv.js) und legt sie im QA-Tool an, statt sie
+// manuell eintippen zu müssen. Abgleich läuft über channels.external_id
+// (= MyDataValue/Airbnb listing_id): existiert schon ein Kanal mit dieser
+// ID, wird nur die Roh-JSON (mdv_data) aktualisiert, statt ein Duplikat
+// anzulegen — betrifft z. B. die bereits manuell angelegten Test-Inserate,
+// sobald deren Airbnb-Listing-ID mit einem MyDataValue-Eintrag übereinstimmt.
+app.post("/mdv/import", requireRole("admin"), async (req, res) => {
+  try {
+    const mdvListings = await listAllAirbnbListings();
+    let created = 0;
+    let updated = 0;
+    for (const item of mdvListings) {
+      const listingId = String(item.listing_id);
+      const existing = db
+        .prepare("SELECT id FROM channels WHERE platform = 'airbnb' AND external_id = ?")
+        .get(listingId);
+      if (existing) {
+        db.prepare("UPDATE channels SET mdv_data = ?, mdv_synced_at = datetime('now') WHERE id = ?").run(
+          JSON.stringify(item),
+          existing.id
+        );
+        updated++;
+      } else {
+        const displayName = item.nickname || item.listing_title || `Airbnb ${listingId}`;
+        const listingInfo = db
+          .prepare("INSERT INTO listings (name, note, created_by) VALUES (?, ?, ?)")
+          .run(displayName, "Automatisch aus MyDataValue importiert.", req.currentUser.id);
+        db.prepare(
+          "INSERT INTO channels (listing_id, platform, external_id, mdv_data, mdv_synced_at) VALUES (?, 'airbnb', ?, ?, datetime('now'))"
+        ).run(listingInfo.lastInsertRowid, listingId, JSON.stringify(item));
+        created++;
+      }
+    }
+    res.redirect(
+      "/?msg=" +
+        encodeURIComponent(
+          `MyDataValue-Import abgeschlossen: ${created} neue Inserate angelegt, ${updated} bestehende aktualisiert (von ${mdvListings.length} Airbnb-Listings in MyDataValue).`
+        )
+    );
+  } catch (err) {
+    res.redirect(
+      "/?msg=" + encodeURIComponent("Fehler beim MyDataValue-Import: " + ((err && err.message) || String(err)))
+    );
+  }
 });
 
 // ---------- listing detail ----------
