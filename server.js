@@ -9,6 +9,7 @@ const { computeFindings } = require("./lib/checks");
 const { fetchLiveOtaData } = require("./lib/otaScraper");
 const { applyBrowserImport } = require("./lib/browserImport");
 const { mergeTextFields, parseTextFields } = require("./lib/textFields");
+const { extractAirbnbListingId } = require("./lib/airbnbUrl");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -201,7 +202,19 @@ app.post("/listings", requireAuth, (req, res) => {
 app.get("/listings/:id", requireAuth, (req, res) => {
   const listing = db.prepare("SELECT * FROM listings WHERE id = ?").get(req.params.id);
   if (!listing) return res.status(404).send("Inserat nicht gefunden.");
-  const channelsRaw = db.prepare("SELECT * FROM channels WHERE listing_id = ? ORDER BY created_at").all(listing.id);
+  let channelsRaw = db.prepare("SELECT * FROM channels WHERE listing_id = ? ORDER BY created_at").all(listing.id);
+  // Nachträgliches Befüllen der Airbnb-Listing-ID bei Kanälen, die schon vor
+  // dieser Automatik angelegt wurden und noch einen Link, aber keine ID haben.
+  channelsRaw = channelsRaw.map((ch) => {
+    if (ch.platform === "airbnb" && ch.url && !ch.external_id) {
+      const derived = extractAirbnbListingId(ch.url);
+      if (derived) {
+        db.prepare("UPDATE channels SET external_id = ? WHERE id = ?").run(derived, ch.id);
+        return { ...ch, external_id: derived };
+      }
+    }
+    return ch;
+  });
   const channels = channelsRaw.map((ch) => {
     const rooms = db.prepare("SELECT * FROM rooms WHERE channel_id = ? ORDER BY sort_order, id").all(ch.id);
     const findings = computeFindings(ch, rooms);
@@ -231,10 +244,16 @@ app.post("/listings/:id/delete", requireRole("admin"), (req, res) => {
 
 app.post("/listings/:id/channels", requireAuth, (req, res) => {
   const { platform, url } = req.body;
-  db.prepare("INSERT INTO channels (listing_id, platform, url) VALUES (?, ?, ?)").run(
+  // Airbnb-Listing-ID (für die Browser-Extension) direkt aus dem Link
+  // übernehmen, statt sie ein zweites Mal manuell abtippen zu lassen — bei
+  // den meisten Airbnb-Inseraten ist es dieselbe Zahl wie in der
+  // Host-Editor-URL. Bleibt trotzdem editierbar (siehe lib/airbnbUrl.js).
+  const externalId = platform === "airbnb" ? extractAirbnbListingId(url) : null;
+  db.prepare("INSERT INTO channels (listing_id, platform, url, external_id) VALUES (?, ?, ?, ?)").run(
     req.params.id,
     platform,
-    url || null
+    url || null,
+    externalId
   );
   res.redirect("/listings/" + req.params.id);
 });

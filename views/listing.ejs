@@ -60,8 +60,12 @@
       <input type="text" name="external_id" value="<%= ch.external_id || '' %>" placeholder="z. B. 1135860716568917181" />
     </div>
     <div style="flex:3" class="muted">
-      Findest du in der Editor-URL: airbnb.com/hosting/listings/<strong>editor/&lt;ID&gt;</strong>/details/photo-tour.
-      Damit die QA-Tool-Chrome-Extension weiss, welchen Kanal sie hier aktualisieren soll.
+      Wird automatisch aus dem Inserat-Link oben übernommen (bei den meisten
+      Airbnb-Inseraten dieselbe Zahl wie in der Editor-URL). Falls die
+      Host-Editor-URL abweicht — dort steht sie in
+      airbnb.com/hosting/listings/<strong>editor/&lt;ID&gt;</strong>/details/photo-tour
+      — hier von Hand korrigieren. Damit weiss die QA-Tool-Chrome-Extension,
+      welchen Kanal sie aktualisieren soll.
     </div>
     <button type="submit" class="secondary">Speichern</button>
   </form>
