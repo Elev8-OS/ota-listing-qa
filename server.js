@@ -279,7 +279,16 @@ app.post("/channels/:id/import", requireAuth, async (req, res) => {
     result.note,
     ch.id
   );
-  res.redirect("/listings/" + ch.listing_id + "?msg=" + encodeURIComponent("Import ausgeführt."));
+  res.redirect(
+    "/listings/" +
+      ch.listing_id +
+      "?msg=" +
+      encodeURIComponent(
+        result.ok
+          ? "Import ausgeführt – Felder wurden vorbefüllt, bitte unten prüfen."
+          : "Import ausgeführt, aber es konnten keine Felder gelesen werden (siehe Hinweis beim Kanal unten)."
+      )
+  );
 });
 
 app.post("/channels/:id/rooms", requireAuth, (req, res) => {
