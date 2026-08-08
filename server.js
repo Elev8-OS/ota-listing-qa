@@ -11,6 +11,7 @@ const { applyBrowserImport } = require("./lib/browserImport");
 const { mergeTextFields, parseTextFields } = require("./lib/textFields");
 const { extractAirbnbListingId } = require("./lib/airbnbUrl");
 const { rewriteText } = require("./lib/aiRewrite");
+const { describeImage } = require("./lib/aiVision");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -409,6 +410,52 @@ app.post("/api/browser-import", requireExtensionApiKey, (req, res) => {
     ch.id
   );
   res.json({ ok, channel_id: ch.id, listing_id: ch.listing_id, note: result.note, textFieldsCount });
+});
+
+// Die Extension klickt auf der Fotorundgang-Seite eines Raums automatisch
+// durch jedes Foto (liest dabei nur — es wird nirgends "Save" geklickt) und
+// schickt für jedes Foto dessen Editor-Pfad (enthält die feste, eindeutige
+// Foto-ID: .../photo-tour/<raum>/space-photo/<foto>) plus Bild-URL hierher.
+// Für jedes Foto lässt Claude-Vision einen Alt-Text-Vorschlag erzeugen und
+// legt ihn unter demselben {path, field_id:"alt-text-input"}-Schema ab wie
+// die generische Texterfassung — dieselbe Anzeige/Vier-Augen-Freigabe/
+// Rückschreib-Mechanik greift dadurch unverändert. Läuft sequenziell (nicht
+// parallel), um die Claude-API nicht zu überlasten; pro Aufruf max. 40 Fotos.
+app.post("/api/browser-import/photos", requireExtensionApiKey, async (req, res) => {
+  const { platform, external_id, room_label, items } = req.body || {};
+  if (!platform || !external_id) {
+    return res.status(400).json({ ok: false, error: "platform und external_id sind erforderlich." });
+  }
+  const ch = findChannelByExternalId(platform, external_id);
+  if (!ch) {
+    return res.status(404).json({ ok: false, error: "Kein passender Kanal gefunden." });
+  }
+  if (!Array.isArray(items) || !items.length) {
+    return res.status(400).json({ ok: false, error: "Keine Fotos übergeben." });
+  }
+  const capped = items.slice(0, 40);
+  const results = [];
+  let textFieldsJson = ch.text_fields;
+  for (const item of capped) {
+    if (!item || !item.path || !item.imageUrl) {
+      results.push({ path: item && item.path, ok: false, error: "Pfad oder Bild-URL fehlt." });
+      continue;
+    }
+    const described = await describeImage({ imageUrl: item.imageUrl, roomName: room_label });
+    if (described.ok) {
+      textFieldsJson = mergeTextFields(textFieldsJson, item.path, [{ id: "alt-text-input", value: described.text }]);
+    }
+    results.push({ path: item.path, ok: described.ok, error: described.ok ? undefined : described.error });
+  }
+  const successCount = results.filter((r) => r.ok).length;
+  db.prepare(
+    `UPDATE channels SET text_fields = ?, last_imported_at = datetime('now'), import_note = ? WHERE id = ?`
+  ).run(
+    textFieldsJson,
+    `${successCount}/${capped.length} Alt-Text-Vorschläge per Claude-Vision erstellt${room_label ? ` (Raum: ${room_label})` : ""}.`,
+    ch.id
+  );
+  res.json({ ok: successCount > 0, channel_id: ch.id, listing_id: ch.listing_id, successCount, total: capped.length, results });
 });
 
 // ---------- Text-Vorschläge ("alle Texte im Inserat") ----------

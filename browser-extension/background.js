@@ -1,9 +1,12 @@
-// Hintergrundprozess (Service Worker). Zwei Aufgaben:
+// Hintergrundprozess (Service Worker). Drei Aufgaben:
 //   1) OTA_QA_TOOL_IMPORT: vom content.js extrahierte Felder per API-Key-
 //      authentifiziertem POST ans QA-Tool schicken.
 //   2) OTA_QA_TOOL_FETCH_WRITEBACK: freigegebene Text-Vorschläge fürs
 //      aktuelle Listing (+ optional aktuelle Editor-Unterseite) abfragen,
 //      damit content.js sie ins passende Feld eintragen kann.
+//   3) OTA_QA_TOOL_PHOTO_SCAN: die beim automatischen Durchklicken eines
+//      Raums gesammelten Fotos (Pfad + Bild-URL) ans QA-Tool schicken, das
+//      pro Foto per Claude-Vision einen Alt-Text-Vorschlag erzeugt.
 // Läuft hier (statt im content.js), weil Extension-Hintergrundprozesse mit
 // deklarierten host_permissions nicht den CORS-Beschränkungen der
 // aufrufenden Seite (airbnb.com) unterliegen.
@@ -69,6 +72,38 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
     })();
     return true;
+  }
+
+  if (msg.type === "OTA_QA_TOOL_PHOTO_SCAN") {
+    (async () => {
+      try {
+        const { baseUrl, apiKey } = await getConfig();
+        if (!baseUrl || !apiKey) {
+          sendResponse({ ok: false, error: "Bitte zuerst in den Extension-Optionen QA-Tool-URL und API-Key hinterlegen." });
+          return;
+        }
+        const url = baseUrl.replace(/\/+$/, "") + "/api/browser-import/photos";
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+          body: JSON.stringify({
+            platform: msg.platform,
+            external_id: msg.external_id,
+            room_label: msg.room_label,
+            items: msg.items,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          sendResponse({ ok: false, error: data.error || `HTTP ${res.status}` });
+          return;
+        }
+        sendResponse(data);
+      } catch (err) {
+        sendResponse({ ok: false, error: String((err && err.message) || err) });
+      }
+    })();
+    return true; // Antwort kommt asynchron (Claude-Vision braucht Zeit pro Foto).
   }
 
   return false;
