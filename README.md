@@ -17,7 +17,7 @@ freigegeben werden (Vier-Augen-Prinzip), bevor sie als umgesetzt markiert wird.
 3. Zimmer mit Schlafgelegenheit im Fotorundgang, das im separaten Bereich
    "Schlafgelegenheiten" fehlt
 4. Hinterlegter Bettentyp pro Zimmer vs. Bettentyp, der auf den Fotos zu sehen ist
-5. Gesamte Schlafkapazität vs. maximale Gäستezahl
+5. Gesamte Schlafkapazität vs. maximale Gästezahl
 
 ## Datenimport aus dem OTA-Link (Playwright, live von Airbnb/Booking.com)
 
