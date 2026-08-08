@@ -72,6 +72,12 @@ CREATE TABLE IF NOT EXISTS proposals (
   created_at TEXT DEFAULT (datetime('now')),
   reviewed_at TEXT
 );
+
+-- Key/Value-Ablage fuer Dinge wie den rotierenden MyDataValue-Refresh-Token.
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
 `);
 
 // Migration: neue Spalte für den roh ausgelesenen "Where you'll sleep" /
@@ -80,6 +86,33 @@ CREATE TABLE IF NOT EXISTS proposals (
 // idempotent, daher try/catch für bereits existierende Installationen.
 try {
   db.exec("ALTER TABLE channels ADD COLUMN live_sleeping_text TEXT");
+} catch (e) {
+  if (!/duplicate column/i.test(e.message)) throw e;
+}
+
+// Migration: MyDataValue-Anbindung. external_id = Airbnb listing_id bzw.
+// Booking.com property_id in MyDataValue (nicht aus der huebschen URL ableitbar,
+// muss manuell eingetragen werden). mdv_data = letzte Rohantwort als JSON,
+// mdv_synced_at = Zeitpunkt der letzten Synchronisierung.
+for (const stmt of [
+  "ALTER TABLE channels ADD COLUMN external_id TEXT",
+  "ALTER TABLE channels ADD COLUMN mdv_data TEXT",
+  "ALTER TABLE channels ADD COLUMN mdv_synced_at TEXT",
+]) {
+  try {
+    db.exec(stmt);
+  } catch (e) {
+    if (!/duplicate column/i.test(e.message)) throw e;
+  }
+}
+
+// Migration: Browser-Extension-Import. live_source unterscheidet, woher
+// live_sleeping_text zuletzt stammt ('scraper' = öffentlicher Playwright-Import,
+// 'extension' = QA-Tool-Chrome-Extension aus dem eingeloggten Host-Editor).
+// external_id (oben) wird hierfür wiederverwendet: bei Airbnb die Listing-ID
+// aus der Editor-URL (.../hosting/listings/editor/<external_id>/...).
+try {
+  db.exec("ALTER TABLE channels ADD COLUMN live_source TEXT");
 } catch (e) {
   if (!/duplicate column/i.test(e.message)) throw e;
 }
