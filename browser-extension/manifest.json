@@ -1,8 +1,10 @@
 {
   "manifest_version": 3,
   "name": "OTA QA-Tool – Airbnb Host-Editor Import",
-  "version": "1.0.0",
-  "description": "Liest Fotorundgang- und Sleeping-Arrangements-Daten aus dem eingeloggten Airbnb-Host-Editor und sendet sie an das interne OTA-Listing-QA-Tool.",
+  "version": "1.1.0",
+  "author": "Reto Wyss",
+  "description": "Internes Elev8-Suite-Tool: liest Fotorundgang-, Sleeping-Arrangements-, Text- und Foto-Daten aus dem eingeloggten Airbnb-Host-Editor und sendet sie ans interne OTA-Listing-QA-Tool (Vier-Augen-Freigabe). Siehe CHANGELOG.md für Versionshistorie und README.md fuer Details.",
+  "homepage_url": "https://github.com/Elev8-OS/ota-listing-qa",
   "background": {
     "service_worker": "background.js"
   },
@@ -21,10 +23,5 @@
     "https://www.airbnb.de/*",
     "https://web-production-362e.up.railway.app/*"
   ],
-  "optional_host_permissions": ["https://*/*"],
-  "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
-  }
+  "optional_host_permissions": ["https://*/*"]
 }

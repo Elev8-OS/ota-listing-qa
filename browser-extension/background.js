@@ -31,7 +31,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
-          body: JSON.stringify({ platform: msg.platform, external_id: msg.external_id, fields: msg.fields }),
+          body: JSON.stringify({
+            platform: msg.platform,
+            external_id: msg.external_id,
+            fields: msg.fields,
+            extension_version: chrome.runtime.getManifest().version,
+          }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {

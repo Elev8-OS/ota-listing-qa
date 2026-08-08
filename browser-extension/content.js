@@ -249,6 +249,21 @@
         status.textContent = text;
       }
 
+      // WICHTIG: Version aus dem Manifest lesen statt hartzukodieren, damit
+      // sie nie veralten kann — und immer sichtbar, damit auf einen Blick
+      // erkennbar ist, ob "Neu laden" in chrome://extensions tatsächlich eine
+      // neue Version aktiviert hat (Neu laden liest nur den aktuellen Stand
+      // des entpackten Ordners; ohne vorheriges Entpacken der neuen Zip in
+      // genau diesen Ordner ändert der Reload-Klick nichts — live erlebt).
+      const versionLabel = document.createElement("div");
+      versionLabel.id = "ota-qa-tool-version-label";
+      versionLabel.style.cssText = "color:#999;font-size:10px;background:#fff;padding:1px 6px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.15)";
+      try {
+        versionLabel.textContent = "OTA QA-Tool Extension v" + chrome.runtime.getManifest().version;
+      } catch (e) {
+        versionLabel.textContent = "OTA QA-Tool Extension";
+      }
+
       const sendBtn = document.createElement("button");
       sendBtn.type = "button";
       sendBtn.textContent = "An OTA QA-Tool senden";
@@ -403,6 +418,7 @@
       wrap.appendChild(photoScanBtn);
       wrap.appendChild(fillBtn);
       wrap.appendChild(sendBtn);
+      wrap.appendChild(versionLabel);
       document.body.appendChild(wrap);
     }
 

@@ -141,4 +141,15 @@ for (const stmt of [
   }
 }
 
+// Migration: Extension-Versionsstand pro Kanal speichern, mitgeschickt von
+// background.js (chrome.runtime.getManifest().version). Zeigt im QA-Tool auf
+// einen Blick, ob eine Person noch mit einer veralteten, lokal entpackten
+// Extension arbeitet (chrome://extensions "Neu laden" aktualisiert nur den
+// aktuellen Ordnerinhalt, das passiert leicht unbemerkt — live erlebt).
+try {
+  db.exec("ALTER TABLE channels ADD COLUMN last_extension_version TEXT");
+} catch (e) {
+  if (!/duplicate column/i.test(e.message)) throw e;
+}
+
 module.exports = db;

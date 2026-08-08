@@ -1,0 +1,34 @@
+<%- include('partials/head', { title: 'Extension', user }) %>
+<h1>Chrome-Extension</h1>
+<p class="subtitle">
+  Liest im eingeloggten Airbnb-Host-Editor Daten aus, die öffentlich nie
+  sichtbar sind, und sendet sie ans QA-Tool. Details: siehe README in der
+  Zip. Aktuelle Version: <strong>v<%= version %></strong> · Autor: Reto Wyss.
+</p>
+
+<div class="card" style="max-width:640px">
+  <a class="btn" href="/extension/download">Extension herunterladen (v<%= version %>, .zip)</a>
+</div>
+
+<div class="card" style="max-width:640px;margin-top:16px">
+  <h3 style="margin-top:0">Installation</h3>
+  <ol>
+    <li>Zip entpacken (an einem festen Ort speichern, nicht löschen — Chrome liest die Extension direkt aus diesem Ordner).</li>
+    <li><code>chrome://extensions</code> öffnen, oben rechts "Entwicklermodus" aktivieren.</li>
+    <li>"Entpackte Erweiterung laden" klicken und den entpackten Ordner auswählen.</li>
+    <li>Auf das Erweiterungssymbol → "Details" → "Erweiterungsoptionen" (oder Rechtsklick aufs Icon → Optionen). QA-Tool-URL ist vorausgefüllt; API-Key bei Reto erfragen.</li>
+  </ol>
+  <h3>Update auf eine neue Version</h3>
+  <ol>
+    <li>Neue Zip von dieser Seite herunterladen und in <strong>denselben</strong> Ordner entpacken (alte Dateien überschreiben).</li>
+    <li>Erst danach in <code>chrome://extensions</code> auf "Neu laden" klicken — der Reload-Klick liest nur den aktuellen Ordnerinhalt neu ein, ohne vorheriges Entpacken ändert er nichts.</li>
+    <li>Offene Airbnb-Tabs einmal per F5 neu laden.</li>
+  </ol>
+  <p class="muted">Die laufende Version steht danach unten rechts im kleinen Status-Widget auf jeder Airbnb-Editor-Seite — damit lässt sich sofort prüfen, ob das Update tatsächlich aktiv ist.</p>
+</div>
+
+<div class="card" style="max-width:640px;margin-top:16px">
+  <h3 style="margin-top:0">Changelog</h3>
+  <pre style="white-space:pre-wrap;font-size:13px"><%= changelog %></pre>
+</div>
+<%- include('partials/foot') %>

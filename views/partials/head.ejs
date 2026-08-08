@@ -12,6 +12,7 @@
   <a class="brand" href="/">OTA QA-Tool</a>
   <nav>
     <a href="/">Inserate</a>
+    <a href="/extension">Extension</a>
     <% if (user.role === 'admin') { %><a href="/users">Benutzer</a><% } %>
     <a href="/account">Konto</a>
     <span class="who"><%= user.name %> · <span class="role-badge role-<%= user.role %>"><%= user.role %></span></span>

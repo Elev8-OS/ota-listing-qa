@@ -66,7 +66,7 @@
 
   <% if (ch.import_note) { %>
   <div class="alert info">
-    <%= ch.import_note %> <span class="muted">(<%= ch.last_imported_at %><% if (ch.live_source) { %> · Quelle: Browser-Extension (dein eingeloggter Host-Editor)<% } %>)</span>
+    <%= ch.import_note %> <span class="muted">(<%= ch.last_imported_at %><% if (ch.live_source) { %> · Quelle: Browser-Extension (dein eingeloggter Host-Editor)<% } %><% if (ch.last_extension_version) { %> · Extension v<%= ch.last_extension_version %><% } %>)</span>
   </div>
   <% } %>
   <% if (ch.live_sleeping_text) { %>
@@ -283,7 +283,7 @@
             textarea.value = data.text;
             status.textContent = 'Vorschlag eingefügt (Modell: ' + data.model + ') — bitte prüfen, ggf. anpassen, dann einreichen.';
           } else {
-            status.textContent = 'Fehler: ' + (data.error || 'unbekannt');
+            status.textContent = 'Fehler: ' + err;
           }
         })
         .catch(function (err) {
