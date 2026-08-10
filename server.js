@@ -448,6 +448,34 @@ app.get("/mdv/oauth/callback", requireRole("admin"), async (req, res) => {
 // https://api.elev8-suite.com/api/v1, Bearer-Token in ELEV8_API_TOKEN),
 // siehe Git-Historie fuer die frühere Implementierung.
 
+// TEMPORAER (wird nach Gebrauch wieder entfernt): nur zum Herausfinden der
+// exakten Feldnamen im ota_channels-Array eines Elev8-Listings (fuer den
+// Airbnb+Booking-Zusammenfuehrungs-Merge beim MyDataValue-Import). Gibt NUR
+// id/name/ota_channels zurueck, absichtlich keine anderen Felder (keine
+// sensiblen Daten wie beim frueheren Probe).
+app.get("/admin/elev8-probe-ota-channels", requireRole("admin"), async (req, res) => {
+  const token = process.env.ELEV8_API_TOKEN;
+  if (!token) return res.status(500).json({ error: "ELEV8_API_TOKEN fehlt." });
+  try {
+    const upstream = await fetch("https://api.elev8-suite.com/api/v1/listing?limit=5", {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+    const text = await upstream.text();
+    if (!upstream.ok) return res.status(upstream.status).json({ error: text });
+    const parsed = JSON.parse(text);
+    const items = parsed.data || parsed.results || parsed;
+    const filtered = (Array.isArray(items) ? items : []).map((it) => ({
+      id: it.id,
+      name: it.name || it.nickname || it.title,
+      type_value: it.type_value,
+      ota_channels: it.ota_channels,
+    }));
+    res.json({ raw_keys: Array.isArray(items) && items[0] ? Object.keys(items[0]) : [], filtered });
+  } catch (err) {
+    res.status(502).json({ error: String((err && err.message) || err) });
+  }
+});
+
 // ---------- listing detail ----------
 
 app.get("/listings/:id", requireAuth, (req, res) => {
