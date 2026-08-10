@@ -3,13 +3,17 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title><%= typeof title !== 'undefined' ? title + ' · OTA QA-Tool' : 'OTA QA-Tool' %></title>
+<title><%= typeof title !== 'undefined' ? title + ' · Elev8 OTA QA-Tool' : 'Elev8 OTA QA-Tool' %></title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="icon" href="/elev8-logo.svg" type="image/svg+xml" />
 <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
 <% if (typeof user !== 'undefined' && user) { %>
 <header class="topbar">
-  <a class="brand" href="/">OTA QA-Tool</a>
+  <a class="brand" href="/"><img src="/elev8-logo-white.svg" alt="Elev8" /> OTA QA-Tool</a>
   <nav>
     <a href="/">Inserate</a>
     <a href="/extension">Extension</a>
