@@ -686,6 +686,28 @@ app.get("/api/browser-import/ping", requireExtensionApiKey, (req, res) => {
   res.json({ ok: true, app: "ota-qa-tool" });
 });
 
+// Vom "Automatischer Scan"-Bereich der Extension (options.js) abgefragt:
+// welche Kanäle eines Portals (aktuell nur "airbnb", da Booking.com sich
+// nicht unbeaufsichtigt automatisieren lässt — Login-Sperre bei
+// Skript-Navigation, siehe README) haben bereits eine externe ID (=
+// Airbnb-Listing-ID) hinterlegt? Der Scan kann NUR bereits im QA-Tool
+// angelegte Kanäle befüllen (siehe findChannelByExternalId unten, 404 ohne
+// Treffer) — er legt bewusst keine neuen Kanäle/Inserate selbst an.
+app.get("/api/browser-import/scan-targets", requireExtensionApiKey, (req, res) => {
+  const platform = (req.query.platform || "airbnb").trim();
+  const rows = db
+    .prepare(
+      `SELECT channels.id AS channel_id, channels.external_id AS external_id, channels.listing_id AS listing_id,
+              listings.name AS listing_name
+       FROM channels
+       JOIN listings ON listings.id = channels.listing_id
+       WHERE channels.platform = ? AND channels.external_id IS NOT NULL AND channels.external_id != ''
+       ORDER BY listings.name`
+    )
+    .all(platform);
+  res.json({ ok: true, items: rows });
+});
+
 function findChannelByExternalId(platform, external_id) {
   return db.prepare("SELECT * FROM channels WHERE platform = ? AND external_id = ?").get(platform, String(external_id));
 }

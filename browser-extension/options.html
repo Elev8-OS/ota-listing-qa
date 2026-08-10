@@ -11,7 +11,10 @@
   input { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; }
   button { margin-top: 16px; margin-right: 8px; padding: 8px 16px; background: #e0004d; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
   button.secondary { background: #eee; color: #222; }
+  button:disabled { opacity: .5; cursor: default; }
   #status { margin-top: 12px; font-size: 13px; }
+  hr { margin-top: 28px; border: none; border-top: 1px solid #ddd; }
+  #scan-log { margin-top: 12px; background: #111; color: #ddd; font-size: 12px; font-family: ui-monospace, Menlo, Consolas, monospace; padding: 10px 12px; border-radius: 6px; max-height: 220px; overflow-y: auto; white-space: pre-wrap; display: none; }
 </style>
 </head>
 <body>
@@ -32,6 +35,28 @@
   <button id="test" class="secondary">Verbindung testen</button>
 
   <div id="status"></div>
+
+  <hr />
+
+  <h2>Automatischer Scan (Airbnb)</h2>
+  <p class="hint">
+    Scannt automatisch, im Hintergrund, alle Airbnb-Kanäle, bei denen im
+    QA-Tool bereits eine <b>Airbnb Listing-ID</b> hinterlegt ist: öffnet dazu
+    nacheinander pro Listing die Editor-Seiten "Photo tour", "Description"
+    (inkl. automatischem Durchklicken aller Unterpanels) und "Title", liest
+    jeweils die Felder aus und sendet sie ans QA-Tool — genau wie beim
+    manuellen "An OTA QA-Tool senden", nur ohne dass du selbst navigieren oder
+    klicken musst. Es öffnet dafür einen eigenen Hintergrund-Tab und lässt ihn
+    während des Scans in Ruhe. Diese Seite muss dafür offen bleiben.
+    <b>Booking.com</b> lässt sich aus technischen Gründen (Login-Sperre bei
+    Skript-Navigation im Extranet) nicht automatisieren — dort bitte weiterhin
+    manuell pro Unterkunft "An OTA QA-Tool senden" klicken.
+  </p>
+
+  <button id="scan-start">Scan starten</button>
+  <button id="scan-stop" class="secondary" disabled>Scan abbrechen</button>
+
+  <div id="scan-log"></div>
 
   <script src="options.js"></script>
 </body>

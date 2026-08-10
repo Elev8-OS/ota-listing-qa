@@ -154,6 +154,89 @@
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  // ---------- Automatischer Hintergrund-Scan (v1.5.0) ----------
+  // Im Gegensatz zu Booking.com (Login-Sperre bei Skript-Navigation, siehe
+  // README/CHANGELOG) lässt sich Airbnbs Host-Editor per direkter URL-
+  // Navigation UND per skriptgestütztem .click() vollständig automatisieren
+  // (live geprüft: kein Login-Wall, .click() öffnet die Description-
+  // Unterpanels genauso wie ein echter Klick). options.js (der "Automatischer
+  // Scan"-Bereich) nutzt das: es navigiert selbst durch alle Editor-Seiten
+  // jedes Listings und schickt hierhin die Nachricht "OTA_QA_TOOL_AUTO_SCAN_PAGE" —
+  // diese Funktion liest die aktuelle Seite GENAU so aus wie ein manueller
+  // Klick auf "An OTA QA-Tool senden" (identisches Feld-Format), klickt aber
+  // auf der Description-Seite zusätzlich selbst durch alle Unterpanels statt
+  // nur das (leere) Übersichtspanel zu lesen. Es wird auch hier nirgends
+  // "Save" geklickt oder etwas in Airbnb verändert — nur gelesen.
+  const DESCRIPTION_PANEL_LABELS = [
+    "Listing description",
+    "Your property",
+    "Guest access",
+    "Interaction with guests",
+    "Other details to note",
+  ];
+
+  function findClickableByExactText(text) {
+    return [...document.querySelectorAll("button, [role='button'], a")].find(
+      (el) => (el.textContent || "").trim() === text
+    );
+  }
+
+  // Das Schliessen eines offenen Unterpanels läuft über einen "Back"-Button —
+  // davon gibt es auf der Seite mehrere (u. a. für die Haupt-Navigation),
+  // aber nur der zum offenen Panel gehörende ist sichtbar UND liegt am
+  // weitesten rechts (live geprüft: liefert zuverlässig genau den richtigen).
+  function findVisibleBackButton() {
+    const backs = [...document.querySelectorAll('button[aria-label="Back"], [role="button"][aria-label="Back"]')]
+      .map((b) => ({ el: b, rect: b.getBoundingClientRect() }))
+      .filter((b) => b.rect.width > 0 && b.rect.height > 0);
+    if (!backs.length) return null;
+    backs.sort((a, b) => b.rect.left - a.rect.left);
+    return backs[0].el;
+  }
+
+  // Klickt nacheinander jedes der fünf bekannten Description-Unterpanels auf,
+  // liest dessen Textfeld(er) (inkl. Panel-Präfix über getOpenPanelLabel(),
+  // siehe oben) und schliesst es wieder, bevor das nächste geöffnet wird —
+  // dieselbe Reihenfolge/Wartezeit, die live als zuverlässig geprüft wurde.
+  // Fehlt ein Panel bei einem bestimmten Listing (z. B. weil Airbnb das Panel
+  // je Listing-Typ unterschiedlich anzeigt), wird es einfach übersprungen statt
+  // den ganzen Scan abzubrechen.
+  async function autoScanDescriptionPanels() {
+    const collected = [];
+    for (const label of DESCRIPTION_PANEL_LABELS) {
+      const btn = findClickableByExactText(label);
+      if (!btn) continue;
+      btn.click();
+      await sleep(1400);
+      collected.push(...extractGenericTextFields());
+      const backBtn = findVisibleBackButton();
+      if (backBtn) {
+        backBtn.click();
+        await sleep(900);
+      }
+    }
+    return collected;
+  }
+
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (!msg || msg.type !== "OTA_QA_TOOL_AUTO_SCAN_PAGE") return false;
+    (async () => {
+      const listingId = extractListingId();
+      if (!listingId) {
+        sendResponse({ ok: false, error: "Keine Listing-ID in der URL gefunden." });
+        return;
+      }
+      // Auf der Description-Seite sind die Unterpanel-Buttons vorhanden — dort
+      // automatisch durchklicken. Auf allen anderen Seiten (Title, Photo tour,
+      // ...) reicht die generische Erfassung der bereits sichtbaren Felder.
+      const hasDescriptionPanels = DESCRIPTION_PANEL_LABELS.some((label) => findClickableByExactText(label));
+      const rawTextInputs = hasDescriptionPanels ? await autoScanDescriptionPanels() : extractGenericTextFields();
+      const fields = { ...extractPhotoTourFields(), page: location.pathname, rawTextInputs };
+      sendResponse({ ok: true, listingId, fields });
+    })();
+    return true; // Antwort kommt asynchron (Panel-Klicks brauchen Zeit).
+  });
+
   // Ist dies die Foto-Grid-Seite eines einzelnen Raums (z. B. .../details/
   // photo-tour/790119223), NICHT die Detailseite eines einzelnen Fotos
   // (.../space-photo/<id>) und nicht die Fotorundgang-Übersicht aller Räume?

@@ -11,6 +11,24 @@ neu geladene Version tatsächlich aktiv ist (chrome://extensions → Neu laden
 lädt nur das, was aktuell im entpackten Ordner liegt; die Zip muss davor
 dort entpackt worden sein).
 
+## 1.5.0 – 2026-08-10
+
+- Neu: **Automatischer Hintergrund-Scan für Airbnb** (Extension-Optionen →
+  "Automatischer Scan starten"). Liest alle Airbnb-Kanäle mit hinterlegter
+  Listing-ID automatisch aus einem eigenen Hintergrund-Tab: navigiert selbst
+  durch "Photo tour"/"Description"/"Title", klickt auf der Description-Seite
+  automatisch durch alle Unterpanels ("Listing description"/"Your
+  property"/...) und sendet alles ans QA-Tool — ohne dass man selbst
+  Seiten wechseln oder Buttons klicken muss. Läuft auf der Optionsseite
+  (nicht im Service Worker), damit ein mehrminütiger Scan über viele Listings
+  nicht durch Chromes Service-Worker-Timeout abgebrochen wird.
+  Live geprüft: Airbnb erlaubt (im Gegensatz zu Booking.com) sowohl direkte
+  URL-Navigation als auch skriptgestützte Klicks ohne Login-Sperre — bleibt
+  deshalb bewusst **Airbnb-exklusiv**. Booking.coms Extranet löst bei
+  Skript-Navigation eine erneute Passwort-Abfrage aus und lässt sich deshalb
+  nicht unbeaufsichtigt automatisieren; dort bleibt es beim manuellen "An OTA
+  QA-Tool senden" pro Unterkunft.
+
 ## 1.4.0 – 2026-08-10
 
 - Neu: Booking.com-Unterstützung (bisher nur Airbnb). Läuft auf der

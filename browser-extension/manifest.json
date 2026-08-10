@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OTA QA-Tool – Airbnb & Booking.com Host-Editor Import",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "author": "Reto Wyss",
   "description": "Internes Elev8-Suite-Tool: liest Fotorundgang-, Sleeping-Arrangements-, Text- und Foto-Daten aus dem eingeloggten Airbnb-Host-Editor bzw. Profil-Textfelder aus dem eingeloggten Booking.com-Extranet und sendet sie ans interne OTA-Listing-QA-Tool (Vier-Augen-Freigabe). Siehe CHANGELOG.md für Versionshistorie und README.md fuer Details.",
   "homepage_url": "https://github.com/Elev8-OS/ota-listing-qa",
@@ -21,7 +21,7 @@
     }
   ],
   "options_page": "options.html",
-  "permissions": ["storage"],
+  "permissions": ["storage", "tabs"],
   "host_permissions": [
     "https://www.airbnb.com/*",
     "https://www.airbnb.ch/*",

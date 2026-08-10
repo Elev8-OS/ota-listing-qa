@@ -86,6 +86,37 @@ Es wird also nie automatisch etwas in Airbnb gespeichert oder abgeschickt —
 nur gelesen (Schritt 1) bzw. ins Formularfeld eingetragen, ohne zu speichern
 (Schritt 4).
 
+## Automatischer Hintergrund-Scan (nur Airbnb)
+
+Statt für jedes Listing selbst zu navigieren und "An OTA QA-Tool senden" zu
+klicken, kann die Extension alle Airbnb-Kanäle mit hinterlegter Listing-ID
+automatisch im Hintergrund durchscannen:
+
+1. Im QA-Tool bei allen betreffenden Airbnb-Kanälen die **Airbnb Listing-ID**
+   hinterlegen (siehe oben).
+2. Extension-Optionen öffnen → Abschnitt "Automatischer Scan (Airbnb)" →
+   **"Scan starten"** klicken.
+3. Die Extension öffnet einen eigenen Hintergrund-Tab, navigiert dort selbst
+   nacheinander zu "Photo tour", "Description" (inkl. automatischem
+   Durchklicken aller Unterpanels: "Listing description"/"Your property"/
+   "Guest access"/"Interaction with guests"/"Other details to note") und
+   "Title" jedes Listings, liest die Felder aus und sendet sie ans QA-Tool —
+   identisch zum manuellen "An OTA QA-Tool senden", nur automatisiert.
+4. Der Live-Log auf der Optionsseite zeigt den Fortschritt; "Scan abbrechen"
+   stoppt nach dem aktuell laufenden Listing. Die Optionsseite muss während
+   des Scans offen bleiben (der Scan läuft dort, nicht im Hintergrundprozess,
+   damit ein mehrminütiger Lauf nicht durch Chromes Service-Worker-Timeout
+   abbricht).
+5. Wie überall in diesem Tool: **nichts wird automatisch in Airbnb
+   gespeichert** — der Scan liest nur, das Vier-Augen-Prinzip für Text-
+   Umformulierungen bleibt unverändert.
+
+**Nur Airbnb:** Booking.coms Extranet löst bei jeder skriptgestützten
+Navigation (auch mit gültigem Session-Token) eine erneute Passwort-Abfrage
+aus — live geprüft, kein Umgehen ohne das Passwort selbst einzugeben (was
+diese Extension aus Sicherheitsgründen nie tut). Bei Booking.com bleibt es
+deshalb beim manuellen "An OTA QA-Tool senden" pro Unterkunft.
+
 ## Booking.com
 
 Booking.com hat ein grundsätzlich anderes Content-Modell als Airbnb:
