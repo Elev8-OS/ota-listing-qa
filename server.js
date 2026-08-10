@@ -13,7 +13,7 @@ const { mergeTextFields, parseTextFields } = require("./lib/textFields");
 const { extractAirbnbListingId } = require("./lib/airbnbUrl");
 const { rewriteText } = require("./lib/aiRewrite");
 const { describeImage } = require("./lib/aiVision");
-const { listAllAirbnbListings } = require("./lib/mdv");
+const mdv = require("./lib/mdv");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -239,50 +239,149 @@ app.post("/listings", requireAuth, (req, res) => {
 });
 
 // ---------- MyDataValue-Import ----------
-// Holt alle Airbnb-Listings aus MyDataValue (server-seitig, eigene
-// API-Zugangsdaten — siehe lib/mdv.js) und legt sie im QA-Tool an, statt sie
-// manuell eintippen zu müssen. Abgleich läuft über channels.external_id
-// (= MyDataValue/Airbnb listing_id): existiert schon ein Kanal mit dieser
-// ID, wird nur die Roh-JSON (mdv_data) aktualisiert, statt ein Duplikat
-// anzulegen — betrifft z. B. die bereits manuell angelegten Test-Inserate,
-// sobald deren Airbnb-Listing-ID mit einem MyDataValue-Eintrag übereinstimmt.
+// Holt alle Airbnb-Listings UND Booking.com-Objekte aus MyDataValue
+// (server-seitig, eigene API-Zugangsdaten — siehe lib/mdv.js) und legt sie im
+// QA-Tool an, statt sie manuell eintippen zu müssen. Abgleich läuft über
+// channels.external_id (= MyDataValue/Airbnb listing_id bzw. Booking
+// property_id): existiert schon ein Kanal mit dieser ID, wird nur die
+// Roh-JSON (mdv_data) aktualisiert, statt ein Duplikat anzulegen — betrifft
+// z. B. bereits manuell angelegte Test-Inserate, sobald deren ID mit einem
+// MyDataValue-Eintrag übereinstimmt.
+function upsertMdvChannel({ platform, externalId, displayName, rawItem, createdBy }) {
+  const existing = db.prepare("SELECT id FROM channels WHERE platform = ? AND external_id = ?").get(platform, externalId);
+  if (existing) {
+    db.prepare("UPDATE channels SET mdv_data = ?, mdv_synced_at = datetime('now') WHERE id = ?").run(
+      JSON.stringify(rawItem),
+      existing.id
+    );
+    return "updated";
+  }
+  const listingInfo = db
+    .prepare("INSERT INTO listings (name, note, created_by) VALUES (?, ?, ?)")
+    .run(displayName, "Automatisch aus MyDataValue importiert.", createdBy);
+  db.prepare(
+    "INSERT INTO channels (listing_id, platform, external_id, mdv_data, mdv_synced_at) VALUES (?, ?, ?, ?, datetime('now'))"
+  ).run(listingInfo.lastInsertRowid, platform, externalId, JSON.stringify(rawItem));
+  return "created";
+}
+
 app.post("/mdv/import", requireRole("admin"), async (req, res) => {
   try {
-    const mdvListings = await listAllAirbnbListings();
+    const [airbnbListings, bookingProperties] = await Promise.all([
+      mdv.listAllAirbnbListings(),
+      mdv.listAllBookingProperties(),
+    ]);
     let created = 0;
     let updated = 0;
-    for (const item of mdvListings) {
-      const listingId = String(item.listing_id);
-      const existing = db
-        .prepare("SELECT id FROM channels WHERE platform = 'airbnb' AND external_id = ?")
-        .get(listingId);
-      if (existing) {
-        db.prepare("UPDATE channels SET mdv_data = ?, mdv_synced_at = datetime('now') WHERE id = ?").run(
-          JSON.stringify(item),
-          existing.id
-        );
-        updated++;
-      } else {
-        const displayName = item.nickname || item.listing_title || `Airbnb ${listingId}`;
-        const listingInfo = db
-          .prepare("INSERT INTO listings (name, note, created_by) VALUES (?, ?, ?)")
-          .run(displayName, "Automatisch aus MyDataValue importiert.", req.currentUser.id);
-        db.prepare(
-          "INSERT INTO channels (listing_id, platform, external_id, mdv_data, mdv_synced_at) VALUES (?, 'airbnb', ?, ?, datetime('now'))"
-        ).run(listingInfo.lastInsertRowid, listingId, JSON.stringify(item));
-        created++;
-      }
+    for (const item of airbnbListings) {
+      const outcome = upsertMdvChannel({
+        platform: "airbnb",
+        externalId: String(item.listing_id),
+        displayName: item.nickname || item.listing_title || `Airbnb ${item.listing_id}`,
+        rawItem: item,
+        createdBy: req.currentUser.id,
+      });
+      if (outcome === "created") created++;
+      else updated++;
+    }
+    for (const item of bookingProperties) {
+      const outcome = upsertMdvChannel({
+        platform: "booking",
+        externalId: String(item.property_id),
+        displayName: item.name || `Booking.com ${item.property_id}`,
+        rawItem: item,
+        createdBy: req.currentUser.id,
+      });
+      if (outcome === "created") created++;
+      else updated++;
     }
     res.redirect(
       "/?msg=" +
         encodeURIComponent(
-          `MyDataValue-Import abgeschlossen: ${created} neue Inserate angelegt, ${updated} bestehende aktualisiert (von ${mdvListings.length} Airbnb-Listings in MyDataValue).`
+          `MyDataValue-Import abgeschlossen: ${created} neue Inserate angelegt, ${updated} bestehende aktualisiert (von ${airbnbListings.length} Airbnb-Listings + ${bookingProperties.length} Booking.com-Objekten in MyDataValue).`
         )
     );
   } catch (err) {
     res.redirect(
       "/?msg=" + encodeURIComponent("Fehler beim MyDataValue-Import: " + ((err && err.message) || String(err)))
     );
+  }
+});
+
+// ---------- MyDataValue-Übersicht + Recalculate-Jobs ----------
+// Laut MyDataValue-Support (Martin Dawson) ist "recalculate-jobs" der
+// wichtigste Endpunkt: er berechnet den Promotion-Stack für die gewählten
+// Airbnb-Listings/Booking-Objekte neu (dieselbe Engine wie der nächtliche
+// Auto-Refresh) und pusht das Ergebnis sofort live. Diese Seite listet alle
+// per MyDataValue-Import verknüpften Kanäle zum Auswählen und zeigt die
+// zuletzt gestarteten Jobs.
+app.get("/mdv", requireRole("admin"), async (req, res) => {
+  const linkedChannels = db
+    .prepare(
+      `SELECT c.id, c.platform, c.external_id, c.mdv_synced_at, l.name AS listing_name
+       FROM channels c JOIN listings l ON l.id = c.listing_id
+       WHERE c.external_id IS NOT NULL AND c.external_id != ''
+       ORDER BY c.platform, l.name`
+    )
+    .all();
+  let recentJobs = [];
+  let jobsError = null;
+  try {
+    const page = await mdv.listRecalculateJobs({ limit: 10 });
+    recentJobs = page.results || [];
+  } catch (err) {
+    jobsError = (err && err.message) || String(err);
+  }
+  res.render("mdv", { linkedChannels, recentJobs, jobsError, msg: req.query.msg || null });
+});
+
+app.post("/mdv/recalculate-jobs", requireRole("admin"), async (req, res) => {
+  const ids = Array.isArray(req.body.channel_ids) ? req.body.channel_ids : req.body.channel_ids ? [req.body.channel_ids] : [];
+  if (!ids.length) {
+    return res.redirect("/mdv?msg=" + encodeURIComponent("Bitte mindestens ein Inserat auswählen."));
+  }
+  const rows = db
+    .prepare(`SELECT id, platform, external_id FROM channels WHERE id IN (${ids.map(() => "?").join(",")})`)
+    .all(...ids);
+  const listingIds = rows.filter((r) => r.platform === "airbnb").map((r) => r.external_id);
+  const propertyIds = rows
+    .filter((r) => r.platform === "booking")
+    .map((r) => Number(r.external_id))
+    .filter((n) => Number.isFinite(n));
+  const submittedJobs = [];
+  const errors = [];
+  try {
+    if (listingIds.length) {
+      const job = await mdv.submitRecalculateJob({ channel: "airbnb", listingIds, skipUnavailable: true });
+      submittedJobs.push(job);
+    }
+  } catch (err) {
+    errors.push("Airbnb: " + ((err && err.message) || String(err)));
+  }
+  try {
+    if (propertyIds.length) {
+      const job = await mdv.submitRecalculateJob({ channel: "booking", propertyIds, skipUnavailable: true });
+      submittedJobs.push(job);
+    }
+  } catch (err) {
+    errors.push("Booking.com: " + ((err && err.message) || String(err)));
+  }
+  const parts = [];
+  if (submittedJobs.length) {
+    parts.push(
+      `${submittedJobs.length} Recalculate-Job(s) gestartet: ${submittedJobs.map((j) => j.id).join(", ")}.`
+    );
+  }
+  if (errors.length) parts.push("Fehler: " + errors.join(" / "));
+  res.redirect("/mdv?msg=" + encodeURIComponent(parts.join(" ") || "Nichts zu tun."));
+});
+
+app.get("/mdv/recalculate-jobs/:jobId", requireRole("admin"), async (req, res) => {
+  try {
+    const job = await mdv.getRecalculateJob(req.params.jobId);
+    res.render("mdv-job", { job, jobType: "Recalculate-Job", error: null });
+  } catch (err) {
+    res.render("mdv-job", { job: null, jobType: "Recalculate-Job", error: (err && err.message) || String(err) });
   }
 });
 

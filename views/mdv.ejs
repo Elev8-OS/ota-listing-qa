@@ -1,0 +1,81 @@
+<%- include('partials/head', { title: 'MyDataValue', user }) %>
+<h1>MyDataValue</h1>
+<p class="subtitle">
+  Anbindung an die MyDataValue-API (Airbnb + Booking.com). Der Server hält
+  eigene Zugangsdaten (Dauerhafter Sync, kein manueller Export/Import nötig).
+</p>
+
+<% if (msg) { %><div class="alert success"><%= msg %></div><% } %>
+
+<div class="card">
+  <h3 style="margin-top:0">Inserate aus MyDataValue importieren</h3>
+  <p class="muted">Holt alle Airbnb-Listings und Booking.com-Objekte des Teams und legt fehlende Inserate im QA-Tool an (Abgleich über die externe ID).</p>
+  <form method="post" action="/mdv/import">
+    <button type="submit">Jetzt importieren</button>
+  </form>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <h3 style="margin-top:0">Promotion-Stack neu berechnen (Recalculate-Job)</h3>
+  <p class="muted">
+    Berechnet für die gewählten Inserate den Promotion-Stack neu und pusht das
+    Ergebnis sofort live — dieselbe Engine wie der nächtliche Auto-Refresh, nur
+    sofort und gezielt. Der Zielpreis/-prozentsatz selbst wird nicht hier gesetzt,
+    sondern muss vorher in MyDataValue konfiguriert sein (z. B. Guest-Target,
+    Promotions, Loyalty, Mobile-Discount) — der Job berechnet nur, was daraus folgt,
+    und pusht es.
+  </p>
+  <% if (!linkedChannels.length) { %>
+    <p class="muted">Noch keine Inserate mit MyDataValue verknüpft. Erst oben importieren, oder bei einem Kanal die externe ID hinterlegen.</p>
+  <% } else { %>
+  <form method="post" action="/mdv/recalculate-jobs">
+    <div style="max-height:320px;overflow:auto;border:1px solid var(--border,#333);border-radius:8px;padding:8px;margin-bottom:12px">
+      <% linkedChannels.forEach(function(ch) { %>
+        <label style="display:flex;align-items:center;gap:8px;padding:4px 0">
+          <input type="checkbox" name="channel_ids" value="<%= ch.id %>" />
+          <span class="badge <%= ch.platform === 'airbnb' ? 'ok' : 'mid' %>"><%= ch.platform %></span>
+          <span><%= ch.listing_name %></span>
+          <span class="muted">(<%= ch.external_id %>)</span>
+          <% if (ch.mdv_synced_at) { %><span class="muted">· zuletzt synced <%= ch.mdv_synced_at %></span><% } %>
+        </label>
+      <% }) %>
+    </div>
+    <button type="submit">Ausgewählte neu berechnen</button>
+  </form>
+  <% } %>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <h3 style="margin-top:0">Zuletzt gestartete Recalculate-Jobs</h3>
+  <% if (jobsError) { %>
+    <p class="muted">Konnte Job-Liste nicht laden: <%= jobsError %></p>
+  <% } else if (!recentJobs.length) { %>
+    <p class="muted">Noch keine Recalculate-Jobs.</p>
+  <% } else { %>
+    <table style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr>
+          <th style="text-align:left">Job</th>
+          <th style="text-align:left">Kanal</th>
+          <th style="text-align:left">Status</th>
+          <th style="text-align:left">Einheiten</th>
+          <th style="text-align:left">Erstellt</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% recentJobs.forEach(function(j) { %>
+          <tr>
+            <td><code><%= j.id %></code></td>
+            <td><%= j.channel %></td>
+            <td><span class="badge <%= j.status === 'succeeded' ? 'ok' : (j.status === 'failed' ? 'high' : 'mid') %>"><%= j.status %></span></td>
+            <td><%= j.completed_units %>/<%= j.total_units %> (<%= j.error_units %> Fehler)</td>
+            <td><%= j.created_at %></td>
+            <td><a href="/mdv/recalculate-jobs/<%= j.id %>">Details</a></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>
+<%- include('partials/foot') %>

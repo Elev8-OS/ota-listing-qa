@@ -1,0 +1,49 @@
+<%- include('partials/head', { title: 'MyDataValue-Job', user }) %>
+<h1><%= jobType %></h1>
+<p class="subtitle"><a href="/mdv">&larr; zurück zur MyDataValue-Übersicht</a></p>
+
+<% if (error) { %>
+  <div class="card"><p class="muted">Konnte Job nicht laden: <%= error %></p></div>
+<% } else { %>
+  <div class="card">
+    <p><strong>ID:</strong> <code><%= job.id %></code></p>
+    <p><strong>Kanal:</strong> <%= job.channel %> · <strong>Scope:</strong> <%= job.scope %></p>
+    <p><strong>Status:</strong>
+      <span class="badge <%= job.status === 'succeeded' ? 'ok' : (job.status === 'failed' ? 'high' : 'mid') %>"><%= job.status %></span>
+    </p>
+    <p><strong>Einheiten:</strong> <%= job.completed_units %>/<%= job.total_units %> abgeschlossen, <%= job.error_units %> Fehler, <%= job.skipped_units %> übersprungen</p>
+    <p><strong>Erstellt:</strong> <%= job.created_at %> · <strong>Gestartet:</strong> <%= job.started_at || '—' %> · <strong>Beendet:</strong> <%= job.finished_at || '—' %></p>
+    <% if (job.error) { %><p class="muted">Fehler: <%= job.error %></p><% } %>
+    <% if (job.retry_guidance) { %><p class="muted">Retry-Hinweis: <%= job.retry_guidance %></p><% } %>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3 style="margin-top:0">Einheiten (pro Ziel)</h3>
+    <% if (!job.units || !job.units.length) { %>
+      <p class="muted">Noch keine Einheiten (Job evtl. noch nicht gestartet).</p>
+    <% } else { %>
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr>
+            <th style="text-align:left">Ziel-Typ</th>
+            <th style="text-align:left">Ziel-ID</th>
+            <th style="text-align:left">Status</th>
+            <th style="text-align:left">Detail</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% job.units.forEach(function(u) { %>
+            <tr>
+              <td><%= u.target_type %></td>
+              <td><code><%= u.target_id %></code></td>
+              <td><span class="badge <%= u.status === 'ok' ? 'ok' : (u.status === 'error' ? 'high' : 'mid') %>"><%= u.status %></span></td>
+              <td class="muted"><%= u.error || (u.detail ? JSON.stringify(u.detail) : '—') %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+    <% if (job.has_more) { %><p class="muted">Es gibt weitere Einheiten (Seite gekürzt).</p><% } %>
+  </div>
+<% } %>
+<%- include('partials/foot') %>
