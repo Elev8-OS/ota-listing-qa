@@ -232,12 +232,123 @@
     return items;
   }
 
+  // Widget ist per Drag-Griff frei verschiebbar (Position wird über
+  // chrome.storage.local gemerkt) und lässt sich auf ein kleines Icon
+  // einklappen — beides, weil das Widget standardmässig unten rechts sitzt
+  // und dort teilweise Airbnb-eigene Bedienelemente (z. B. den Chat-Button)
+  // verdeckt und damit unklickbar macht (live gemeldet). Ohne Verschieben/
+  // Einklappen bliebe das ein Dauerproblem, weil sich Airbnbs Layout von
+  // Seite zu Seite unterscheidet und "ein fester Ort, der nie stört" gar
+  // nicht existiert.
+  const WIDGET_STORAGE_KEY = "otaQaToolWidgetState";
+
+  function clampToViewport(left, top, width, height) {
+    const maxLeft = Math.max(0, window.innerWidth - width - 4);
+    const maxTop = Math.max(0, window.innerHeight - height - 4);
+    return { left: Math.min(Math.max(0, left), maxLeft), top: Math.min(Math.max(0, top), maxTop) };
+  }
+
+  function saveWidgetState(state) {
+    try {
+      chrome.storage.local.set({ [WIDGET_STORAGE_KEY]: state });
+    } catch (e) {
+      // Storage evtl. nicht verfügbar (z. B. Extension wird gerade neu geladen) — Position geht dann nur für diesen Moment verloren.
+    }
+  }
+
+  function makeDraggable(wrap, handle) {
+    let dragging = false;
+    let startX = 0;
+    let startY = 0;
+    let startLeft = 0;
+    let startTop = 0;
+
+    handle.addEventListener("mousedown", (e) => {
+      dragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      const rect = wrap.getBoundingClientRect();
+      startLeft = rect.left;
+      startTop = rect.top;
+      handle.style.cursor = "grabbing";
+      e.preventDefault();
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (!dragging) return;
+      const rect = wrap.getBoundingClientRect();
+      const { left, top } = clampToViewport(
+        startLeft + (e.clientX - startX),
+        startTop + (e.clientY - startY),
+        rect.width,
+        rect.height
+      );
+      wrap.style.left = left + "px";
+      wrap.style.top = top + "px";
+    });
+
+    window.addEventListener("mouseup", () => {
+      if (!dragging) return;
+      dragging = false;
+      handle.style.cursor = "grab";
+      const rect = wrap.getBoundingClientRect();
+      saveWidgetState({ left: rect.left, top: rect.top, collapsed: wrap.dataset.collapsed === "1" });
+    });
+
+    // Falls das Fenster verkleinert wird, Widget wieder in den sichtbaren Bereich holen statt es ausserhalb hängen zu lassen.
+    window.addEventListener("resize", () => {
+      const rect = wrap.getBoundingClientRect();
+      const { left, top } = clampToViewport(rect.left, rect.top, rect.width, rect.height);
+      wrap.style.left = left + "px";
+      wrap.style.top = top + "px";
+    });
+  }
+
   function injectUi() {
     if (!document.getElementById("ota-qa-tool-import-wrap")) {
       const wrap = document.createElement("div");
       wrap.id = "ota-qa-tool-import-wrap";
+      wrap.dataset.collapsed = "0";
+      // Position vorerst nur ein Platzhalter (unten rechts, wie bisher) —
+      // die tatsächliche, gemerkte Position wird gleich unten asynchron aus
+      // chrome.storage.local nachgeladen und überschreibt das.
       wrap.style.cssText =
-        "position:fixed;bottom:20px;right:20px;z-index:999999;font-family:-apple-system,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;align-items:flex-end;gap:8px";
+        "position:fixed;bottom:20px;right:20px;z-index:999999;font-family:-apple-system,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;gap:6px;max-width:320px";
+
+      const header = document.createElement("div");
+      header.style.cssText =
+        "display:flex;align-items:center;justify-content:flex-end;gap:4px";
+
+      const dragHandle = document.createElement("div");
+      dragHandle.title = "Ziehen, um das Widget zu verschieben";
+      dragHandle.textContent = "⠿";
+      dragHandle.style.cssText =
+        "background:#111;color:#fff;width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:grab;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.25);user-select:none";
+
+      const collapseBtn = document.createElement("button");
+      collapseBtn.type = "button";
+      collapseBtn.title = "Widget einklappen/ausklappen";
+      collapseBtn.textContent = "–";
+      collapseBtn.style.cssText =
+        "background:#111;color:#fff;width:22px;height:22px;border-radius:6px;border:none;cursor:pointer;font-size:14px;line-height:1;box-shadow:0 1px 4px rgba(0,0,0,.25)";
+
+      const body = document.createElement("div");
+      body.id = "ota-qa-tool-body";
+      body.style.cssText = "display:flex;flex-direction:column;align-items:flex-end;gap:8px";
+
+      collapseBtn.addEventListener("click", () => {
+        const collapsedNow = wrap.dataset.collapsed === "1";
+        const nextCollapsed = !collapsedNow;
+        wrap.dataset.collapsed = nextCollapsed ? "1" : "0";
+        body.style.display = nextCollapsed ? "none" : "flex";
+        collapseBtn.textContent = nextCollapsed ? "+" : "–";
+        collapseBtn.title = nextCollapsed ? "Widget ausklappen" : "Widget einklappen";
+        const rect = wrap.getBoundingClientRect();
+        saveWidgetState({ left: rect.left, top: rect.top, collapsed: nextCollapsed });
+      });
+
+      header.appendChild(dragHandle);
+      header.appendChild(collapseBtn);
 
       const status = document.createElement("div");
       status.id = "ota-qa-tool-import-status";
@@ -414,12 +525,46 @@
         }
       });
 
-      wrap.appendChild(status);
-      wrap.appendChild(photoScanBtn);
-      wrap.appendChild(fillBtn);
-      wrap.appendChild(sendBtn);
-      wrap.appendChild(versionLabel);
+      body.appendChild(status);
+      body.appendChild(photoScanBtn);
+      body.appendChild(fillBtn);
+      body.appendChild(sendBtn);
+      body.appendChild(versionLabel);
+      wrap.appendChild(header);
+      wrap.appendChild(body);
       document.body.appendChild(wrap);
+
+      makeDraggable(wrap, dragHandle);
+
+      // Standardposition (unten rechts) in feste left/top-Koordinaten
+      // umrechnen, damit das Ziehen danach konsistent mit left/top statt
+      // bottom/right rechnet — und direkt danach die zuletzt gemerkte
+      // Position/den Einklapp-Zustand aus chrome.storage.local nachladen,
+      // falls die Person das Widget schon einmal verschoben/eingeklappt hat.
+      const initialRect = wrap.getBoundingClientRect();
+      wrap.style.right = "";
+      wrap.style.bottom = "";
+      wrap.style.left = initialRect.left + "px";
+      wrap.style.top = initialRect.top + "px";
+
+      try {
+        chrome.storage.local.get([WIDGET_STORAGE_KEY], (result) => {
+          const saved = result && result[WIDGET_STORAGE_KEY];
+          if (!saved) return;
+          const rect = wrap.getBoundingClientRect();
+          const { left, top } = clampToViewport(saved.left, saved.top, rect.width, rect.height);
+          wrap.style.left = left + "px";
+          wrap.style.top = top + "px";
+          if (saved.collapsed) {
+            wrap.dataset.collapsed = "1";
+            body.style.display = "none";
+            collapseBtn.textContent = "+";
+            collapseBtn.title = "Widget ausklappen";
+          }
+        });
+      } catch (e) {
+        // Storage evtl. nicht verfügbar — Widget bleibt einfach an der Standardposition.
+      }
     }
 
     const photoScanBtn = document.getElementById("ota-qa-tool-photo-scan-btn");

@@ -11,6 +11,17 @@ neu geladene Version tatsächlich aktiv ist (chrome://extensions → Neu laden
 lädt nur das, was aktuell im entpackten Ordner liegt; die Zip muss davor
 dort entpackt worden sein).
 
+## 1.2.0 – 2026-08-10
+
+- Fix: Das Status-Widget sass fest unten rechts und verdeckte dort teilweise
+  Airbnb-eigene Bedienelemente (z. B. den Chat-Button), die dadurch nicht mehr
+  klickbar waren.
+- Neu: Widget per Griff (⠿ oben im Widget) frei verschiebbar — die Position
+  wird gemerkt (auch über Seitenwechsel/Neuladen hinweg) und beim nächsten
+  Besuch automatisch wieder angewendet.
+- Neu: Widget lässt sich per "–"/"+"-Knopf auf ein kleines Icon einklappen,
+  falls es gerade gar nicht stören soll (Zustand wird ebenfalls gemerkt).
+
 ## 1.1.0 – 2026-08-08
 
 - Fix: Airbnb verwendet auf Seiten mit mehreren Unterpanels (z. B.
