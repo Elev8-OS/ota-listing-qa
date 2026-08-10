@@ -87,11 +87,11 @@ button, .btn {
   transition: background 0.15s ease, color 0.15s ease;
 }
 button.secondary, .btn.secondary { background: #fff; color: var(--elev8-black); border: 1px solid #d1d5db; }
-button.danger { background: var(--accent); }
+button.danger, .btn.danger { background: var(--accent); }
 button.success { background: var(--good); }
 button:hover, .btn:hover { background: var(--elev8-yellow); color: var(--elev8-black); opacity: 1; }
 button.secondary:hover, .btn.secondary:hover { background: #fff; border-color: var(--elev8-yellow); color: var(--elev8-black); }
-button.danger:hover { background: var(--accent); opacity: 0.9; }
+button.danger:hover, .btn.danger:hover { background: var(--accent); opacity: 0.9; }
 button.success:hover { background: var(--good); opacity: 0.9; }
 
 table { width: 100%; border-collapse: collapse; font-size: 13.5px; }

@@ -1,0 +1,90 @@
+<%- include('partials/head', { title: 'Alle Inserate löschen', user }) %>
+<h1>Alle Inserate löschen</h1>
+<p class="subtitle">
+  Löscht <strong>alle</strong> Inserate im QA-Tool inkl. aller Kanäle, Zimmer
+  und Vorschläge (Vier-Augen-Historie). Danach kann per
+  <a href="/mdv">MyDataValue-Import</a> neu importiert werden — Airbnb- und
+  Booking.com-Kanäle desselben Elev8-Objekts landen dann automatisch in einem
+  gemeinsamen Inserat statt in zwei getrennten.
+</p>
+
+<% if (msg) { %><div class="alert error"><%= msg %></div><% } %>
+
+<div class="card">
+  <h3 style="margin-top:0">Das wird gelöscht</h3>
+  <p>
+    <strong><%= totals.listings %></strong> Inserat(e),
+    <strong><%= totals.channels %></strong> Kanal/Kanäle,
+    <strong><%= totals.proposals %></strong> Vorschlag/Vorschläge
+    (Vier-Augen-Historie geht dabei verloren).
+  </p>
+  <% if (totals.manuallyCurated > 0) { %>
+    <div class="alert info">
+      Achtung: <strong><%= totals.manuallyCurated %></strong> Inserat(e) sind
+      nicht als automatischer MyDataValue-Import erkennbar (kein
+      entsprechender Hinweistext) — vermutlich manuell angelegt/kuratiert,
+      teils mit echten offenen oder bereits freigegebenen Vorschlägen. Diese
+      gehen beim Löschen genauso verloren wie die automatisch importierten.
+    </div>
+  <% } %>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <h3 style="margin-top:0">Übersicht aller Inserate</h3>
+  <% if (!summary.length) { %>
+    <p class="muted">Keine Inserate vorhanden — nichts zu löschen.</p>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>Inserat</th>
+          <th>Herkunft</th>
+          <th>Kanäle</th>
+          <th>Vorschläge</th>
+          <th>davon freigegeben/umgesetzt</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% summary.forEach(function(l) { %>
+          <tr>
+            <td><%= l.name %></td>
+            <td>
+              <% if (l.note === 'Automatisch aus MyDataValue importiert.') { %>
+                <span class="badge neutral">MyDataValue-Import</span>
+              <% } else { %>
+                <span class="badge mid">manuell/kuratiert</span>
+              <% } %>
+            </td>
+            <td><%= l.channelCount %></td>
+            <td><%= l.proposalCount %></td>
+            <td><%= l.findingProposalCount > 0 ? l.findingProposalCount : '–' %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>
+
+<% if (summary.length) { %>
+<div class="card" style="margin-top:16px; border-color: var(--accent)">
+  <h3 style="margin-top:0; color: var(--accent)">Endgültig löschen</h3>
+  <p class="muted">
+    Diese Aktion kann nicht rückgängig gemacht werden. Zum Bestätigen unten
+    exakt <code class="small"><%= confirmText %></code> eintippen.
+  </p>
+  <form method="post" action="/admin/listings/delete-all" onsubmit="return confirm('Wirklich ALLE Inserate inkl. aller Kanäle/Zimmer/Vorschläge unwiderruflich löschen?')">
+    <div class="row">
+      <div>
+        <label for="confirm_text">Bestätigungstext</label>
+        <input type="text" id="confirm_text" name="confirm_text" autocomplete="off" placeholder="<%= confirmText %>" required />
+      </div>
+    </div>
+    <div style="margin-top:14px">
+      <button type="submit" class="danger"><%= totals.listings %> Inserat(e) endgültig löschen</button>
+      <a href="/" class="btn secondary" style="margin-left:8px">Abbrechen</a>
+    </div>
+  </form>
+</div>
+<% } %>
+
+<%- include('partials/foot') %>

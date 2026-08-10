@@ -14,6 +14,7 @@ const { extractAirbnbListingId } = require("./lib/airbnbUrl");
 const { rewriteText } = require("./lib/aiRewrite");
 const { describeImage } = require("./lib/aiVision");
 const mdv = require("./lib/mdv");
+const elev8 = require("./lib/elev8");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -247,7 +248,14 @@ app.post("/listings", requireAuth, (req, res) => {
 // Roh-JSON (mdv_data) aktualisiert, statt ein Duplikat anzulegen — betrifft
 // z. B. bereits manuell angelegte Test-Inserate, sobald deren ID mit einem
 // MyDataValue-Eintrag übereinstimmt.
-function upsertMdvChannel({ platform, externalId, displayName, rawItem, createdBy }) {
+// otaChannelMap: Ergebnis von elev8.buildOtaChannelMap() — bildet
+// "<platform>:<externalId>" auf eine gemeinsame Elev8-Listing-ID ab, sofern
+// Elev8 dieses Objekt kennt. Damit landen Airbnb- und Booking.com-Kanal
+// desselben physischen Objekts im selben QA-Tool-Inserat, statt je ein
+// eigenes Inserat zu bekommen. Ist keine Zuordnung möglich (Map leer oder
+// kein Treffer), verhält sich das exakt wie vorher: ein neues Inserat pro
+// Kanal.
+function upsertMdvChannel({ platform, externalId, displayName, rawItem, createdBy, otaChannelMap }) {
   const existing = db.prepare("SELECT id FROM channels WHERE platform = ? AND external_id = ?").get(platform, externalId);
   if (existing) {
     db.prepare("UPDATE channels SET mdv_data = ?, mdv_synced_at = datetime('now') WHERE id = ?").run(
@@ -256,13 +264,32 @@ function upsertMdvChannel({ platform, externalId, displayName, rawItem, createdB
     );
     return "updated";
   }
-  const listingInfo = db
-    .prepare("INSERT INTO listings (name, note, created_by) VALUES (?, ?, ?)")
-    .run(displayName, "Automatisch aus MyDataValue importiert.", createdBy);
+
+  const elev8ListingId = otaChannelMap ? otaChannelMap.get(`${platform}:${externalId}`) : null;
+  let listingId = null;
+  let outcome = "created";
+
+  if (elev8ListingId) {
+    const existingListing = db
+      .prepare("SELECT id FROM listings WHERE elev8_listing_id = ?")
+      .get(String(elev8ListingId));
+    if (existingListing) {
+      listingId = existingListing.id;
+      outcome = "merged";
+    }
+  }
+
+  if (!listingId) {
+    const listingInfo = db
+      .prepare("INSERT INTO listings (name, note, created_by, elev8_listing_id) VALUES (?, ?, ?, ?)")
+      .run(displayName, "Automatisch aus MyDataValue importiert.", createdBy, elev8ListingId ? String(elev8ListingId) : null);
+    listingId = listingInfo.lastInsertRowid;
+  }
+
   db.prepare(
     "INSERT INTO channels (listing_id, platform, external_id, mdv_data, mdv_synced_at) VALUES (?, ?, ?, ?, datetime('now'))"
-  ).run(listingInfo.lastInsertRowid, platform, externalId, JSON.stringify(rawItem));
-  return "created";
+  ).run(listingId, platform, externalId, JSON.stringify(rawItem));
+  return outcome;
 }
 
 app.post("/mdv/import", requireRole("admin"), async (req, res) => {
@@ -271,8 +298,27 @@ app.post("/mdv/import", requireRole("admin"), async (req, res) => {
       mdv.listAllAirbnbListings(),
       mdv.listAllBookingProperties(),
     ]);
+
+    // Elev8-Zusammenführung ist ein Best-Effort-Zusatz: schlägt sie fehl
+    // (Token abgelaufen, API nicht erreichbar, ...), läuft der Import trotzdem
+    // durch — dann eben ohne Zusammenführung (ein Inserat pro Plattform, wie
+    // vor dieser Änderung), und die Person wird darüber informiert.
+    let otaChannelMap = new Map();
+    let elev8Warning = null;
+    try {
+      const elev8Listings = await elev8.fetchAllElev8Listings();
+      if (elev8Listings) otaChannelMap = elev8.buildOtaChannelMap(elev8Listings);
+      else elev8Warning = "Kein ELEV8_API_TOKEN konfiguriert — Import lief ohne Airbnb+Booking-Zusammenführung.";
+    } catch (err) {
+      elev8Warning =
+        "Elev8-Zusammenführung fehlgeschlagen (" +
+        ((err && err.message) || String(err)) +
+        ") — Import lief ohne Zusammenführung, Airbnb und Booking.com können hier als getrennte Inserate erscheinen.";
+    }
+
     let created = 0;
     let updated = 0;
+    let merged = 0;
     for (const item of airbnbListings) {
       const outcome = upsertMdvChannel({
         platform: "airbnb",
@@ -280,8 +326,10 @@ app.post("/mdv/import", requireRole("admin"), async (req, res) => {
         displayName: item.nickname || item.listing_title || `Airbnb ${item.listing_id}`,
         rawItem: item,
         createdBy: req.currentUser.id,
+        otaChannelMap,
       });
       if (outcome === "created") created++;
+      else if (outcome === "merged") merged++;
       else updated++;
     }
     for (const item of bookingProperties) {
@@ -291,16 +339,17 @@ app.post("/mdv/import", requireRole("admin"), async (req, res) => {
         displayName: item.name || `Booking.com ${item.property_id}`,
         rawItem: item,
         createdBy: req.currentUser.id,
+        otaChannelMap,
       });
       if (outcome === "created") created++;
+      else if (outcome === "merged") merged++;
       else updated++;
     }
-    res.redirect(
-      "/?msg=" +
-        encodeURIComponent(
-          `MyDataValue-Import abgeschlossen: ${created} neue Inserate angelegt, ${updated} bestehende aktualisiert (von ${airbnbListings.length} Airbnb-Listings + ${bookingProperties.length} Booking.com-Objekten in MyDataValue).`
-        )
-    );
+    const summary =
+      `MyDataValue-Import abgeschlossen: ${created} neue Inserate angelegt, ${merged} Kanäle zu einem ` +
+      `bestehenden (Elev8-verknüpften) Inserat zusammengeführt, ${updated} bestehende Kanäle aktualisiert ` +
+      `(von ${airbnbListings.length} Airbnb-Listings + ${bookingProperties.length} Booking.com-Objekten in MyDataValue).`;
+    res.redirect("/?msg=" + encodeURIComponent(summary + (elev8Warning ? " Hinweis: " + elev8Warning : "")));
   } catch (err) {
     res.redirect(
       "/?msg=" + encodeURIComponent("Fehler beim MyDataValue-Import: " + ((err && err.message) || String(err)))
@@ -448,33 +497,10 @@ app.get("/mdv/oauth/callback", requireRole("admin"), async (req, res) => {
 // https://api.elev8-suite.com/api/v1, Bearer-Token in ELEV8_API_TOKEN),
 // siehe Git-Historie fuer die frühere Implementierung.
 
-// TEMPORAER (wird nach Gebrauch wieder entfernt): nur zum Herausfinden der
-// exakten Feldnamen im ota_channels-Array eines Elev8-Listings (fuer den
-// Airbnb+Booking-Zusammenfuehrungs-Merge beim MyDataValue-Import). Gibt NUR
-// id/name/ota_channels zurueck, absichtlich keine anderen Felder (keine
-// sensiblen Daten wie beim frueheren Probe).
-app.get("/admin/elev8-probe-ota-channels", requireRole("admin"), async (req, res) => {
-  const token = process.env.ELEV8_API_TOKEN;
-  if (!token) return res.status(500).json({ error: "ELEV8_API_TOKEN fehlt." });
-  try {
-    const upstream = await fetch("https://api.elev8-suite.com/api/v1/listing?limit=5", {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-    });
-    const text = await upstream.text();
-    if (!upstream.ok) return res.status(upstream.status).json({ error: text });
-    const parsed = JSON.parse(text);
-    const items = parsed.data || parsed.results || parsed;
-    const filtered = (Array.isArray(items) ? items : []).map((it) => ({
-      id: it.id,
-      name: it.name || it.nickname || it.title,
-      type_value: it.type_value,
-      ota_channels: it.ota_channels,
-    }));
-    res.json({ raw_keys: Array.isArray(items) && items[0] ? Object.keys(items[0]) : [], filtered });
-  } catch (err) {
-    res.status(502).json({ error: String((err && err.message) || err) });
-  }
-});
+// Die temporaere Probe-Route /admin/elev8-probe-ota-channels wurde entfernt,
+// nachdem ihr Zweck erledigt war: sie diente nur dazu, die exakte Feldform
+// von ota_channels herauszufinden (siehe lib/elev8.js für das Ergebnis:
+// [{ ota_listing_id, channel_name: "AIRBNB"|"BOOKING_COM" }]).
 
 // ---------- listing detail ----------
 
@@ -530,6 +556,60 @@ app.get("/listings/:id", requireAuth, (req, res) => {
 app.post("/listings/:id/delete", requireRole("admin"), (req, res) => {
   db.prepare("DELETE FROM listings WHERE id = ?").run(req.params.id);
   res.redirect("/");
+});
+
+// ---------- Alle Inserate löschen (Danger Zone) ----------
+// Für einen kompletten Neustart nach einem MyDataValue-Re-Import (z. B. nach
+// Einführung der Airbnb+Booking-Zusammenführung oben): löscht ALLE Inserate
+// inkl. aller Kanäle/Zimmer/Vorschläge (cascadiert über die FKs in db.js).
+// Zeigt vorher eine Übersicht inkl. manuell angelegter/kuratierter Inserate
+// (mit echten Vorschlägen), damit klar ist, was mitgelöscht wird, und
+// verlangt zusätzlich zum Login-als-Admin einen exakt eingetippten
+// Bestätigungstext (Schutz gegen Klick aus Versehen).
+const DELETE_ALL_CONFIRM_TEXT = "ALLE LÖSCHEN";
+
+app.get("/admin/listings/delete-all", requireRole("admin"), (req, res) => {
+  const listings = db.prepare("SELECT * FROM listings ORDER BY created_at DESC").all();
+  const summary = listings.map((l) => {
+    const channelCount = db.prepare("SELECT COUNT(*) c FROM channels WHERE listing_id = ?").get(l.id).c;
+    const proposalCount = db
+      .prepare(
+        "SELECT COUNT(*) c FROM proposals WHERE channel_id IN (SELECT id FROM channels WHERE listing_id = ?)"
+      )
+      .get(l.id).c;
+    const findingProposalCount = db
+      .prepare(
+        "SELECT COUNT(*) c FROM proposals WHERE status IN ('freigegeben','umgesetzt') AND channel_id IN (SELECT id FROM channels WHERE listing_id = ?)"
+      )
+      .get(l.id).c;
+    return { ...l, channelCount, proposalCount, findingProposalCount };
+  });
+  const totals = {
+    listings: listings.length,
+    channels: db.prepare("SELECT COUNT(*) c FROM channels").get().c,
+    proposals: db.prepare("SELECT COUNT(*) c FROM proposals").get().c,
+    manuallyCurated: summary.filter((l) => l.note !== "Automatisch aus MyDataValue importiert.").length,
+  };
+  res.render("admin-delete-all", {
+    summary,
+    totals,
+    confirmText: DELETE_ALL_CONFIRM_TEXT,
+    msg: req.query.msg || null,
+  });
+});
+
+app.post("/admin/listings/delete-all", requireRole("admin"), (req, res) => {
+  if ((req.body.confirm_text || "").trim() !== DELETE_ALL_CONFIRM_TEXT) {
+    return res.redirect(
+      "/admin/listings/delete-all?msg=" +
+        encodeURIComponent(`Abgebrochen: Bestätigungstext stimmte nicht exakt mit "${DELETE_ALL_CONFIRM_TEXT}" überein.`)
+    );
+  }
+  const info = db.prepare("DELETE FROM listings").run();
+  res.redirect(
+    "/?msg=" +
+      encodeURIComponent(`${info.changes} Inserat(e) inkl. aller Kanäle, Zimmer und Vorschläge gelöscht.`)
+  );
 });
 
 app.post("/listings/:id/channels", requireAuth, (req, res) => {

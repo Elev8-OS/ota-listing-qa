@@ -152,4 +152,20 @@ try {
   if (!/duplicate column/i.test(e.message)) throw e;
 }
 
+// Migration: Zusammenführung von Airbnb- und Booking.com-Kanälen desselben
+// physischen Objekts zu einem einzigen Inserat beim MyDataValue-Import.
+// elev8_listing_id = die Objekt-ID aus der Elev8-Suite-API (item.id), sofern
+// Elev8 dieses Objekt kennt und über sein `ota_channels`-Feld verknüpft hat
+// (siehe lib/elev8.js) — sonst NULL (z. B. Marken, die Elev8 nicht kennt).
+try {
+  db.exec("ALTER TABLE listings ADD COLUMN elev8_listing_id TEXT");
+} catch (e) {
+  if (!/duplicate column/i.test(e.message)) throw e;
+}
+try {
+  db.exec("CREATE INDEX IF NOT EXISTS idx_listings_elev8_listing_id ON listings(elev8_listing_id)");
+} catch (e) {
+  // Index ist optional (kleine Datenmenge) - Fehler hier nicht fatal.
+}
+
 module.exports = db;
