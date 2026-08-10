@@ -454,7 +454,9 @@ app.get("/admin/elev8-listings-dump", requireRole("admin"), async (req, res) => 
   }
   try {
     const url = new URL(`${ELEV8_API_BASE}/listing`);
-    if (req.query.group_units) url.searchParams.set("group_units", req.query.group_units);
+    // Alle Query-Parameter 1:1 durchreichen (page, per_page, group_units, ...),
+    // damit wir von hier aus bequem paginieren/filtern können.
+    Object.entries(req.query).forEach(([k, v]) => url.searchParams.set(k, v));
     const upstream = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
     });
