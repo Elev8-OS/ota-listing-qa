@@ -456,13 +456,43 @@ app.get("/admin/elev8-listings-dump", requireRole("admin"), async (req, res) => 
     const url = new URL(`${ELEV8_API_BASE}/listing`);
     // Alle Query-Parameter 1:1 durchreichen (page, per_page, group_units, ...),
     // damit wir von hier aus bequem paginieren/filtern können.
-    Object.entries(req.query).forEach(([k, v]) => url.searchParams.set(k, v));
+    Object.entries(req.query).forEach(([k, v]) => {
+      if (k !== "slim") url.searchParams.set(k, v);
+    });
     const upstream = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
     });
     const text = await upstream.text();
     res.status(upstream.status);
     res.set("Content-Type", "application/json; charset=utf-8");
+    if (req.query.slim && upstream.ok) {
+      // ?slim=1: nur die für den PriceLabs/MyDataValue-ID-Abgleich relevanten
+      // Felder zurückgeben (kein WLAN-Passwort, keine Zugangscodes etc. im
+      // Response) und dabei alle Seiten in einer Antwort zusammenfassen.
+      try {
+        const parsed = JSON.parse(text);
+        const slimItem = (item) => ({
+          id: item.id,
+          title: item.title,
+          internal_name: item.internal_name,
+          pms_listing_id: item.pms_listing_id,
+          pms_room_id: item.pms_room_id,
+          status: item.status,
+          status_value: item.status_value,
+          ota_channels: item.ota_channels,
+        });
+        return res.json({
+          status: parsed.status,
+          total: parsed.total,
+          per_page: parsed.per_page,
+          current_page: parsed.current_page,
+          last_page: parsed.last_page,
+          data: Array.isArray(parsed.data) ? parsed.data.map(slimItem) : parsed.data,
+        });
+      } catch (e) {
+        // Fällt durch auf die Rohantwort, falls das Parsen scheitert.
+      }
+    }
     res.send(text);
   } catch (err) {
     res.status(502).json({ error: "Elev8-API-Aufruf fehlgeschlagen: " + ((err && err.message) || String(err)) });
