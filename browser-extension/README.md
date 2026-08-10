@@ -1,9 +1,12 @@
-# OTA QA-Tool – Airbnb Host-Editor Import (Chrome-Extension)
+# OTA QA-Tool – Airbnb & Booking.com Host-Editor Import (Chrome-Extension)
 
 Liest im eingeloggten Airbnb-Host-Editor die Felder, die öffentlich nie sichtbar
 sind (Fotorundgang-Zimmerliste, "Sleeping arrangements", Gästezahl, Kopfzeile
-"X bedrooms · Y beds · Z baths") und sendet sie an das ota-qa-tool. Es wird
-nichts auf airbnb.com verändert — nur gelesen.
+"X bedrooms · Y beds · Z baths") sowie im eingeloggten Booking.com-Extranet die
+freien Profil-Textfelder ("About the property"/"About the host"/"About the
+neighbourhood") und sendet sie an das ota-qa-tool. Es wird nichts auf
+airbnb.com oder booking.com verändert — nur gelesen (bzw. beim Zurückschreiben
+freigegebener Texte nur ins Formularfeld eingetragen, nie gespeichert).
 
 ## Warum eine Extension statt Server-seitigem Scraping?
 
@@ -82,3 +85,35 @@ Ablauf:
 Es wird also nie automatisch etwas in Airbnb gespeichert oder abgeschickt —
 nur gelesen (Schritt 1) bzw. ins Formularfeld eingetragen, ohne zu speichern
 (Schritt 4).
+
+## Booking.com
+
+Booking.com hat ein grundsätzlich anderes Content-Modell als Airbnb:
+"Property description" und "Room descriptions" werden **automatisch aus den
+hinterlegten Facilities/Amenities generiert** und sind dort **nicht frei
+editierbar** (nur "Request a correction" für Tippfehler, von Booking-
+Redakteuren geprüft, ~6 Tage Bearbeitungszeit). Die Extension erfasst deshalb
+nicht diese Seite, sondern die Extranet-Seite **"Property" → "Your profile"**
+(bzw. "View your descriptions" → "Go to host profile") — dort gibt es echte,
+freie Textfelder je Sprache:
+
+- **About the property** (Feld-id `hotelier-message-<sprache>-welcome_message`)
+- **About the host** (`…-owner_info`)
+- **About the neighbourhood** (`…-neighborhood_info`)
+- **Host name** (`name-or-company`)
+
+jeweils mit nativem Zeichenlimit (aktuell 2000 bzw. 80 Zeichen) — genau wie
+bei Airbnb wird das Limit erfasst, an die KI-Umformulierung durchgereicht und
+beim Zurückschreiben geprüft.
+
+Ablauf identisch zu Airbnb: auf der Profilseite der Unterkunft
+(`admin.booking.com/.../property_profile.html?hotel_id=<ID>`) auf **"An OTA
+QA-Tool senden"** klicken (Abgleich läuft über `hotel_id` = dieselbe
+Property-ID wie in MyDataValue/Elev8), im QA-Tool Umformulierungen einreichen
+und per Vier-Augen-Prinzip freigeben, dann auf derselben Seite **"Freigegebene
+Texte hier einfüllen"** klicken und selbst in Booking.com speichern.
+
+**Noch nicht umgesetzt:** ein Foto-Alt-Text-Scan wie bei Airbnb, sowie das
+strukturierte Erfassen von Zimmer-/Bettenzahl (Booking.com bildet das über
+verschachtelte Bettentyp-/Anzahl-Dropdowns pro Schlafzimmer ab, nicht über
+einfache Zahlenfelder wie Airbnb — das bräuchte eine eigene Erfassungslogik).

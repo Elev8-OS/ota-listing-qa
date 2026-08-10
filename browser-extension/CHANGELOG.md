@@ -11,6 +11,20 @@ neu geladene Version tatsächlich aktiv ist (chrome://extensions → Neu laden
 lädt nur das, was aktuell im entpackten Ordner liegt; die Zip muss davor
 dort entpackt worden sein).
 
+## 1.4.0 – 2026-08-10
+
+- Neu: Booking.com-Unterstützung (bisher nur Airbnb). Läuft auf der
+  Extranet-Profilseite ("Property" → "Your profile") einer Unterkunft und
+  erfasst dort die drei echten Freitext-Felder ("About the property"/
+  "About the host"/"About the neighbourhood", je Sprache) plus den
+  Unterkunftsnamen — inkl. nativem Zeichenlimit, genau wie bei Airbnb.
+  WICHTIG: Booking.coms "Property description" und "Room descriptions"
+  werden automatisch aus den hinterlegten Facilities/Amenities generiert
+  und sind NICHT frei editierbar (nur "Request a correction" für
+  Tippfehler) — die Extension kann und soll diese deshalb nicht erfassen.
+  Foto-Alt-Text-Scan (wie bei Airbnb) ist für Booking.com noch nicht
+  umgesetzt, da die Fotoseite dort strukturell anders aufgebaut ist.
+
 ## 1.3.0 – 2026-08-10
 
 - Neu: Beim Erfassen der Texte ("alle Texte im Inserat") wird jetzt pro Feld
