@@ -438,103 +438,15 @@ app.get("/mdv/oauth/callback", requireRole("admin"), async (req, res) => {
   }
 });
 
-// ---------- Elev8-Suite API dump (temporaer, fuer ID-Normalisierung) ----------
-// WICHTIG: nur ein einmaliges, admin-geschuetztes Hilfsmittel, um die
-// ota_channels-Daten aus der internen Elev8-Dashboard-API abzuholen (Railway
-// hat normalen Internetzugang, im Gegensatz zur Entwicklungs-Sandbox). Der
-// Bearer-Token liegt als Railway-Variable ELEV8_API_TOKEN vor und laeuft
-// irgendwann ab (Dashboard-Login-Token, kein Service-Account) - das ist ein
-// Uebergangsweg, keine dauerhafte Loesung.
-const ELEV8_API_BASE = "https://api.elev8-suite.com/api/v1";
-
-app.get("/admin/elev8-listings-dump", requireRole("admin"), async (req, res) => {
-  const token = process.env.ELEV8_API_TOKEN;
-  if (!token) {
-    return res.status(500).json({ error: "ELEV8_API_TOKEN ist nicht als Railway-Variable gesetzt." });
-  }
-  try {
-    const url = new URL(`${ELEV8_API_BASE}/listing`);
-    // Alle Query-Parameter 1:1 durchreichen (page, per_page, group_units, ...),
-    // damit wir von hier aus bequem paginieren/filtern können.
-    Object.entries(req.query).forEach(([k, v]) => {
-      if (k !== "slim") url.searchParams.set(k, v);
-    });
-    const upstream = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-    });
-    const text = await upstream.text();
-    res.status(upstream.status);
-    res.set("Content-Type", "application/json; charset=utf-8");
-    if (req.query.slim && upstream.ok) {
-      // ?slim=1: nur die für den PriceLabs/MyDataValue-ID-Abgleich relevanten
-      // Felder zurückgeben (kein WLAN-Passwort, keine Zugangscodes etc. im
-      // Response) und dabei alle Seiten in einer Antwort zusammenfassen.
-      try {
-        const parsed = JSON.parse(text);
-        const slimItem = (item) => ({
-          id: item.id,
-          title: item.title,
-          internal_name: item.internal_name,
-          pms_listing_id: item.pms_listing_id,
-          pms_room_id: item.pms_room_id,
-          status: item.status,
-          status_value: item.status_value,
-          ota_channels: item.ota_channels,
-          amenities: item.amenities,
-          maximum_capacity: item.maximum_capacity,
-          size: item.size,
-          listing_bed_groups: item.listing_bed_groups,
-        });
-        return res.json({
-          status: parsed.status,
-          total: parsed.total,
-          per_page: parsed.per_page,
-          current_page: parsed.current_page,
-          last_page: parsed.last_page,
-          data: Array.isArray(parsed.data) ? parsed.data.map(slimItem) : parsed.data,
-        });
-      } catch (e) {
-        // Fällt durch auf die Rohantwort, falls das Parsen scheitert.
-      }
-    }
-    res.send(text);
-  } catch (err) {
-    res.status(502).json({ error: "Elev8-API-Aufruf fehlgeschlagen: " + ((err && err.message) || String(err)) });
-  }
-});
-
-// Probe-Route (temporaer): Elev8 Detail-Endpoint fuer EIN Listing, um zu
-// prüfen, ob amenities/listing_bed_groups auf der Detailseite befüllt sind
-// (auf der Liste waren sie bei allen 72 Einheiten null).
-app.get("/admin/elev8-listing-detail/:id", requireRole("admin"), async (req, res) => {
-  const token = process.env.ELEV8_API_TOKEN;
-  if (!token) {
-    return res.status(500).json({ error: "ELEV8_API_TOKEN ist nicht als Railway-Variable gesetzt." });
-  }
-  try {
-    const upstream = await fetch(`${ELEV8_API_BASE}/listing/${encodeURIComponent(req.params.id)}`, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-    });
-    const text = await upstream.text();
-    res.status(upstream.status);
-    res.set("Content-Type", "application/json; charset=utf-8");
-    if (req.query.fields && upstream.ok) {
-      try {
-        const parsed = JSON.parse(text);
-        const wanted = String(req.query.fields).split(",");
-        const item = parsed.data || parsed;
-        const out = {};
-        wanted.forEach((f) => (out[f] = item[f]));
-        return res.json(out);
-      } catch (e) {
-        // Fällt durch auf die Rohantwort.
-      }
-    }
-    res.send(text);
-  } catch (err) {
-    res.status(502).json({ error: "Elev8-API-Aufruf fehlgeschlagen: " + ((err && err.message) || String(err)) });
-  }
-});
+// Hinweis: Die frueheren temporaeren Elev8-Suite-API-Probe-Routen
+// (/admin/elev8-listings-dump, /admin/elev8-listing-detail/:id) wurden
+// entfernt, nachdem ihr Zweck (ID-Normalisierung, Amenities-Check) erledigt
+// war — insbesondere die Detail-Route gab ungefiltert auch sensible Felder
+// (WLAN-Passwort, Zugangscodes, Stripe-/Seamlock-IDs) zurueck, was bei
+// aktiviertem Dev-Login (Standard) ein unnoetiges Risiko war. Falls die
+// Elev8-API spaeter wieder gebraucht wird (z. B. Basis-URL
+// https://api.elev8-suite.com/api/v1, Bearer-Token in ELEV8_API_TOKEN),
+// siehe Git-Historie fuer die frühere Implementierung.
 
 // ---------- listing detail ----------
 
