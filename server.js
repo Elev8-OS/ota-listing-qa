@@ -385,6 +385,59 @@ app.get("/mdv/recalculate-jobs/:jobId", requireRole("admin"), async (req, res) =
   }
 });
 
+// ---------- MyDataValue: "Mit MyDataValue verbinden" (OAuth 2.1 + PKCE) ----------
+// Der Refresh-Token kann von MyDataValue-Seite jederzeit ungültig werden
+// (z. B. bei Reaktivierung, Passwortwechsel oder einfach durch Ablauf).
+// Statt dass ein Admin dann händisch einen Token per curl/Postman besorgen
+// muss, meldet er sich hier einmal live mit seinem eigenen MyDataValue-Konto
+// an; das Tool fängt den Autorisierungs-Code über die Redirect-URL ab und
+// tauscht ihn serverseitig gegen einen neuen Refresh-Token, den es dann
+// speichert. Der Assistent/Server sieht dabei nie das MyDataValue-Passwort.
+const MDV_REDIRECT_URI = "https://web-production-362e.up.railway.app/mdv/oauth/callback";
+
+app.get("/mdv/oauth/start", requireRole("admin"), (req, res) => {
+  try {
+    const { verifier, challenge } = mdv.generatePkcePair();
+    const state = crypto.randomBytes(16).toString("hex");
+    req.session.mdvOauthVerifier = verifier;
+    req.session.mdvOauthState = state;
+    const url = mdv.buildAuthorizeUrl({
+      redirectUri: MDV_REDIRECT_URI,
+      state,
+      codeChallenge: challenge,
+    });
+    res.redirect(url);
+  } catch (err) {
+    res.redirect("/mdv?msg=" + encodeURIComponent("Verbindung zu MyDataValue konnte nicht gestartet werden: " + ((err && err.message) || String(err))));
+  }
+});
+
+app.get("/mdv/oauth/callback", requireRole("admin"), async (req, res) => {
+  const { code, state, error, error_description } = req.query;
+  const expectedState = req.session.mdvOauthState;
+  const verifier = req.session.mdvOauthVerifier;
+  delete req.session.mdvOauthState;
+  delete req.session.mdvOauthVerifier;
+
+  if (error) {
+    return res.redirect(
+      "/mdv?msg=" + encodeURIComponent(`MyDataValue-Autorisierung abgelehnt/fehlgeschlagen: ${error_description || error}`)
+    );
+  }
+  if (!code || !state || !expectedState || state !== expectedState) {
+    return res.redirect("/mdv?msg=" + encodeURIComponent("MyDataValue-Autorisierung fehlgeschlagen: ungültiger oder abgelaufener state-Wert. Bitte erneut versuchen."));
+  }
+  if (!verifier) {
+    return res.redirect("/mdv?msg=" + encodeURIComponent("MyDataValue-Autorisierung fehlgeschlagen: PKCE-Verifier fehlt (Sitzung abgelaufen?). Bitte erneut versuchen."));
+  }
+  try {
+    await mdv.exchangeAuthorizationCode({ code, redirectUri: MDV_REDIRECT_URI, codeVerifier: verifier });
+    res.redirect("/mdv?msg=" + encodeURIComponent("Erfolgreich mit MyDataValue verbunden. Neuer Refresh-Token wurde gespeichert."));
+  } catch (err) {
+    res.redirect("/mdv?msg=" + encodeURIComponent("MyDataValue-Tokentausch fehlgeschlagen: " + ((err && err.message) || String(err))));
+  }
+});
+
 // ---------- listing detail ----------
 
 app.get("/listings/:id", requireAuth, (req, res) => {

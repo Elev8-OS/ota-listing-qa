@@ -8,6 +8,25 @@
 <% if (msg) { %><div class="alert success"><%= msg %></div><% } %>
 
 <div class="card">
+  <h3 style="margin-top:0">Verbindung zu MyDataValue</h3>
+  <% if (jobsError) { %>
+    <p class="muted">
+      Die letzte Anfrage an MyDataValue ist fehlgeschlagen (<%= jobsError %>).
+      Das deutet meist auf einen abgelaufenen/ungültigen Token hin — einfach
+      neu verbinden:
+    </p>
+  <% } else { %>
+    <p class="muted">
+      Falls Import oder Recalculate-Jobs mit einem Token-/Autorisierungsfehler
+      abbrechen, hier neu mit MyDataValue verbinden (eigenes MyDataValue-Konto,
+      Zugriff bestätigen — das Tool speichert danach automatisch einen neuen
+      Token).
+    </p>
+  <% } %>
+  <a href="/mdv/oauth/start" class="btn">Mit MyDataValue verbinden</a>
+</div>
+
+<div class="card" style="margin-top:16px">
   <h3 style="margin-top:0">Inserate aus MyDataValue importieren</h3>
   <p class="muted">Holt alle Airbnb-Listings und Booking.com-Objekte des Teams und legt fehlende Inserate im QA-Tool an (Abgleich über die externe ID).</p>
   <form method="post" action="/mdv/import">
