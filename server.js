@@ -9,7 +9,7 @@ const archiver = require("archiver");
 const db = require("./db");
 const { computeFindings } = require("./lib/checks");
 const { applyBrowserImport } = require("./lib/browserImport");
-const { mergeTextFields, parseTextFields } = require("./lib/textFields");
+const { mergeTextFields, parseTextFields, fieldValue, fieldMaxLength } = require("./lib/textFields");
 const { extractAirbnbListingId } = require("./lib/airbnbUrl");
 const { rewriteText } = require("./lib/aiRewrite");
 const { describeImage } = require("./lib/aiVision");
@@ -472,7 +472,18 @@ app.get("/listings/:id", requireAuth, (req, res) => {
     const proposals = withUserNames(
       db.prepare("SELECT * FROM proposals WHERE channel_id = ? ORDER BY created_at DESC").all(ch.id)
     );
-    const textFieldsByPath = parseTextFields(ch.text_fields);
+    // Auf {value, maxLength} normalisieren, damit die View nicht zwischen
+    // altem (reiner String) und neuem Speicherformat unterscheiden muss.
+    const rawTextFieldsByPath = parseTextFields(ch.text_fields);
+    const textFieldsByPath = {};
+    Object.keys(rawTextFieldsByPath).forEach((p) => {
+      const norm = {};
+      Object.keys(rawTextFieldsByPath[p]).forEach((fid) => {
+        const entry = rawTextFieldsByPath[p][fid];
+        norm[fid] = { value: fieldValue(entry) || "", maxLength: fieldMaxLength(entry) };
+      });
+      textFieldsByPath[p] = norm;
+    });
     const proposedTargets = new Set(
       proposals.filter((p) => p.target_field_id).map((p) => p.target_path + "::" + p.target_field_id)
     );
@@ -711,15 +722,21 @@ app.post("/channels/:id/ai-rewrite", requireRole("admin", "bearbeiter"), async (
     return res.status(400).json({ ok: false, error: "Pfad und Feld-ID sind erforderlich." });
   }
   const allFields = parseTextFields(ch.text_fields);
-  const currentText = (allFields[targetPath] || {})[field_id];
+  const fieldEntry = (allFields[targetPath] || {})[field_id];
+  const currentText = fieldValue(fieldEntry);
   if (currentText === undefined) {
     return res.status(404).json({ ok: false, error: "Dieses Textfeld wurde nicht (mehr) erfasst." });
   }
+  // Zeichenlimit (z. B. 50 bei Airbnb-Titeln) kommt aus dem nativen
+  // maxlength-Attribut, das die Extension beim Erfassen mitgespeichert hat —
+  // wird an die KI durchgereicht, damit der Vorschlag von vornherein passt
+  // statt nachträglich in Airbnb selbst abgeschnitten zu werden.
+  const maxLength = fieldMaxLength(fieldEntry);
   const otherFields = [];
   Object.keys(allFields).forEach((p) => {
     Object.keys(allFields[p]).forEach((fid) => {
       if (p === targetPath && fid === field_id) return;
-      otherFields.push({ path: p, fieldId: fid, value: allFields[p][fid] });
+      otherFields.push({ path: p, fieldId: fid, value: fieldValue(allFields[p][fid]) || "" });
     });
   });
   const result = await rewriteText({
@@ -728,6 +745,7 @@ app.post("/channels/:id/ai-rewrite", requireRole("admin", "bearbeiter"), async (
     currentPath: targetPath,
     currentFieldId: field_id,
     otherFields: otherFields.slice(0, 6),
+    maxLength,
   });
   res.json(result);
 });

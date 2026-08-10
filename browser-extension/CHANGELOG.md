@@ -11,6 +11,14 @@ neu geladene Version tatsächlich aktiv ist (chrome://extensions → Neu laden
 lädt nur das, was aktuell im entpackten Ordner liegt; die Zip muss davor
 dort entpackt worden sein).
 
+## 1.3.0 – 2026-08-10
+
+- Neu: Beim Erfassen der Texte ("alle Texte im Inserat") wird jetzt pro Feld
+  zusätzlich Airbnbs natives Zeichenlimit (maxlength-Attribut, z. B. 50 beim
+  Titel) mitgelesen und ans QA-Tool übermittelt. Das Tool zeigt das Limit an,
+  lässt die KI-Umformulierung sich daran halten und warnt beim Zurückschreiben
+  freigegebener Texte, falls ein Feld trotzdem über dem Limit liegt.
+
 ## 1.2.0 – 2026-08-10
 
 - Fix: Das Status-Widget sass fest unten rechts und verdeckte dort teilweise

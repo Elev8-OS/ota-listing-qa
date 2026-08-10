@@ -60,7 +60,13 @@
     document.querySelectorAll("textarea, input[type='text']").forEach((el) => {
       if (!el.id) return;
       const id = panelLabel ? `${panelLabel} · ${el.id}` : el.id;
-      out.push({ id, value: el.value || "" });
+      // el.maxLength ist die native DOM-Eigenschaft für das maxlength-Attribut
+      // (z. B. 50 beim Titel-Feld) — Airbnb setzt das tatsächlich als echtes
+      // HTML-Attribut, deshalb kein Rätselraten über Zeichenlimits pro Feld
+      // nötig. Ohne Attribut liefert der Browser laut Spec -1, das wird hier
+      // zu null (= "kein bekanntes Limit").
+      const maxLength = typeof el.maxLength === "number" && el.maxLength > 0 ? el.maxLength : null;
+      out.push({ id, value: el.value || "", maxLength });
     });
     return out;
   }
@@ -442,6 +448,7 @@
             }
             let filled = 0;
             let wrongPanel = 0;
+            let overLength = [];
             const openPanel = getOpenPanelLabel();
             items.forEach((it) => {
               // WICHTIG: target_field_id kann jetzt ein Präfix haben ("Your
@@ -464,15 +471,27 @@
               if (el) {
                 setFieldValue(el, it.proposed_text);
                 filled++;
+                // WICHTIG: el.value = ... per JS wird vom Browser NICHT auf
+                // maxlength gekürzt (das gilt nur für Texteingabe durch die
+                // Person selbst) — Airbnb würde den zu langen Wert beim
+                // "Save" entweder ablehnen oder serverseitig abschneiden.
+                // Deshalb hier selbst prüfen und die Person warnen, statt
+                // sie das erst beim Speichern in Airbnb merken zu lassen.
+                if (typeof el.maxLength === "number" && el.maxLength > 0 && it.proposed_text.length > el.maxLength) {
+                  overLength.push(`${realId} (${it.proposed_text.length}/${el.maxLength} Zeichen)`);
+                }
               }
             });
             setStatus(
-              filled
+              (filled
                 ? `${filled} Feld(er) eingefüllt (rot markiert) — bitte prüfen und in Airbnb selbst „Save“ klicken. Danach im QA-Tool als „umgesetzt“ markieren.` +
                     (wrongPanel ? ` (${wrongPanel} weitere gehören zu einem anderen Unterpanel — dort öffnen und erneut versuchen.)` : "")
                 : wrongPanel
                   ? `Gefunden, aber gehören zu einem anderen Unterpanel dieser Seite — das jeweils richtige Panel öffnen (z. B. "Your property") und erneut versuchen.`
-                  : "Freigegebene Texte gefunden, aber die zugehörigen Felder sind auf dieser Seite nicht sichtbar (z. B. bei Alt-Texten: erst „Add a visual description“ am Foto öffnen). Dann erneut versuchen."
+                  : "Freigegebene Texte gefunden, aber die zugehörigen Felder sind auf dieser Seite nicht sichtbar (z. B. bei Alt-Texten: erst „Add a visual description“ am Foto öffnen). Dann erneut versuchen.") +
+                (overLength.length
+                  ? ` ⚠️ ACHTUNG, über Airbnbs Zeichenlimit: ${overLength.join(", ")} — Text vor dem Speichern kürzen!`
+                  : "")
             );
           }
         );

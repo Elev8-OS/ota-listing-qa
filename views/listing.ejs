@@ -1,4 +1,3 @@
-
 <%- include('partials/head', { title: listing.name, user }) %>
 <a href="/" class="muted">← Alle Inserate</a>
 <div class="flex-between" style="margin-top:8px">
@@ -93,17 +92,24 @@
     <div class="card" style="background:#fafafa">
       <strong><%= path %></strong>
       <% Object.keys(ch.textFieldsByPath[path]).forEach(function(fieldId) { %>
-        <% const currentValue = ch.textFieldsByPath[path][fieldId]; %>
+        <% const fieldInfo = ch.textFieldsByPath[path][fieldId]; %>
+        <% const currentValue = fieldInfo.value; %>
+        <% const maxLen = fieldInfo.maxLength; %>
         <% const already = ch.proposedTargets.has(path + '::' + fieldId); %>
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e5e5e5">
-          <div class="muted"><%= fieldId %><% if (already) { %> · <span class="status-pill">bereits vorgeschlagen</span><% } %></div>
+          <div class="muted">
+            <%= fieldId %>
+            <% if (maxLen) { %> · <span class="<%= currentValue.length > maxLen ? 'char-limit-badge over' : 'char-limit-badge' %>">Airbnb-Limit: <%= maxLen %> Zeichen<% if (currentValue.length > maxLen) { %> — aktueller Text bereits <%= currentValue.length %> Zeichen, über dem Limit!<% } %></span><% } %>
+            <% if (already) { %> · <span class="status-pill">bereits vorgeschlagen</span><% } %>
+          </div>
           <div style="white-space:pre-wrap;font-size:0.95em;margin:4px 0"><%= currentValue %></div>
           <% if (canPropose) { %>
           <form method="post" action="/channels/<%= ch.id %>/propose-text" class="text-propose-form" data-channel-id="<%= ch.id %>" data-path="<%= path %>" data-field-id="<%= fieldId %>">
             <input type="hidden" name="path" value="<%= path %>" />
             <input type="hidden" name="field_id" value="<%= fieldId %>" />
             <input type="hidden" name="label" value="Text: <%= fieldId %>" />
-            <textarea name="proposed_text" class="ai-rewrite-target"><%= currentValue %></textarea>
+            <textarea name="proposed_text" class="ai-rewrite-target" data-max-length="<%= maxLen || '' %>"><%= currentValue %></textarea>
+            <div class="muted char-count" style="margin-top:2px;font-size:0.85em"></div>
             <div class="row" style="margin-top:6px;align-items:center">
               <button type="button" class="secondary ai-rewrite-btn">Mit KI umformulieren</button>
               <button type="submit" class="secondary">Umformulierung als Vorschlag einreichen</button>
@@ -270,6 +276,34 @@
     var btn = form.querySelector('.ai-rewrite-btn');
     var textarea = form.querySelector('.ai-rewrite-target');
     var status = form.querySelector('.ai-rewrite-status');
+    var counter = form.querySelector('.char-count');
+    var maxLength = textarea && textarea.dataset.maxLength ? Number(textarea.dataset.maxLength) : null;
+
+    // Live-Zeichenzähler: zeigt Airbnbs Limit direkt beim Tippen/nach der
+    // KI-Umformulierung an, statt dass jemand das erst beim Speichern in
+    // Airbnb selbst merkt (dort wird zu langer Text abgeschnitten/abgelehnt).
+    function updateCounter() {
+      if (!counter || !textarea || !maxLength) return;
+      var len = textarea.value.length;
+      counter.textContent = len + ' / ' + maxLength + ' Zeichen';
+      counter.style.color = len > maxLength ? '#c0392b' : '';
+      counter.style.fontWeight = len > maxLength ? '600' : 'normal';
+    }
+    if (textarea) {
+      updateCounter();
+      textarea.addEventListener('input', updateCounter);
+    }
+    form.addEventListener('submit', function (e) {
+      if (maxLength && textarea && textarea.value.length > maxLength) {
+        var proceed = confirm(
+          'Dieser Text ist ' + textarea.value.length + ' Zeichen lang, Airbnbs Limit für dieses Feld liegt bei ' +
+            maxLength + ' Zeichen. Airbnb wird die Änderung vermutlich abschneiden oder ablehnen.\n\n' +
+            'Trotzdem als Vorschlag einreichen?'
+        );
+        if (!proceed) e.preventDefault();
+      }
+    });
+
     if (!btn || !textarea) return;
     btn.addEventListener('click', function () {
       status.style.display = 'inline';
@@ -285,7 +319,15 @@
           btn.disabled = false;
           if (data.ok) {
             textarea.value = data.text;
-            status.textContent = 'Vorschlag eingefügt (Modell: ' + data.model + ') — bitte prüfen, ggf. anpassen, dann einreichen.';
+            updateCounter();
+            var note = 'Vorschlag eingefügt (Modell: ' + data.model + ')';
+            if (data.truncated) {
+              note +=
+                ' — ACHTUNG: Die KI-Antwort war zu lang und wurde automatisch auf ' + data.maxLength +
+                ' Zeichen gekürzt, bitte besonders genau prüfen!';
+            }
+            note += ' — bitte prüfen, ggf. anpassen, dann einreichen.';
+            status.textContent = note;
           } else {
             status.textContent = 'Fehler: ' + (data.error || 'unbekannt');
           }
