@@ -438,6 +438,35 @@ app.get("/mdv/oauth/callback", requireRole("admin"), async (req, res) => {
   }
 });
 
+// ---------- Elev8-Suite API dump (temporaer, fuer ID-Normalisierung) ----------
+// WICHTIG: nur ein einmaliges, admin-geschuetztes Hilfsmittel, um die
+// ota_channels-Daten aus der internen Elev8-Dashboard-API abzuholen (Railway
+// hat normalen Internetzugang, im Gegensatz zur Entwicklungs-Sandbox). Der
+// Bearer-Token liegt als Railway-Variable ELEV8_API_TOKEN vor und laeuft
+// irgendwann ab (Dashboard-Login-Token, kein Service-Account) - das ist ein
+// Uebergangsweg, keine dauerhafte Loesung.
+const ELEV8_API_BASE = "https://api.elev8-suite.com/api/v1";
+
+app.get("/admin/elev8-listings-dump", requireRole("admin"), async (req, res) => {
+  const token = process.env.ELEV8_API_TOKEN;
+  if (!token) {
+    return res.status(500).json({ error: "ELEV8_API_TOKEN ist nicht als Railway-Variable gesetzt." });
+  }
+  try {
+    const url = new URL(`${ELEV8_API_BASE}/listing`);
+    if (req.query.group_units) url.searchParams.set("group_units", req.query.group_units);
+    const upstream = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+    const text = await upstream.text();
+    res.status(upstream.status);
+    res.set("Content-Type", "application/json; charset=utf-8");
+    res.send(text);
+  } catch (err) {
+    res.status(502).json({ error: "Elev8-API-Aufruf fehlgeschlagen: " + ((err && err.message) || String(err)) });
+  }
+});
+
 // ---------- listing detail ----------
 
 app.get("/listings/:id", requireAuth, (req, res) => {
