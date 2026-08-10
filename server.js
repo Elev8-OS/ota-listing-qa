@@ -503,6 +503,39 @@ app.get("/admin/elev8-listings-dump", requireRole("admin"), async (req, res) => 
   }
 });
 
+// Probe-Route (temporaer): Elev8 Detail-Endpoint fuer EIN Listing, um zu
+// prüfen, ob amenities/listing_bed_groups auf der Detailseite befüllt sind
+// (auf der Liste waren sie bei allen 72 Einheiten null).
+app.get("/admin/elev8-listing-detail/:id", requireRole("admin"), async (req, res) => {
+  const token = process.env.ELEV8_API_TOKEN;
+  if (!token) {
+    return res.status(500).json({ error: "ELEV8_API_TOKEN ist nicht als Railway-Variable gesetzt." });
+  }
+  try {
+    const upstream = await fetch(`${ELEV8_API_BASE}/listing/${encodeURIComponent(req.params.id)}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+    const text = await upstream.text();
+    res.status(upstream.status);
+    res.set("Content-Type", "application/json; charset=utf-8");
+    if (req.query.fields && upstream.ok) {
+      try {
+        const parsed = JSON.parse(text);
+        const wanted = String(req.query.fields).split(",");
+        const item = parsed.data || parsed;
+        const out = {};
+        wanted.forEach((f) => (out[f] = item[f]));
+        return res.json(out);
+      } catch (e) {
+        // Fällt durch auf die Rohantwort.
+      }
+    }
+    res.send(text);
+  } catch (err) {
+    res.status(502).json({ error: "Elev8-API-Aufruf fehlgeschlagen: " + ((err && err.message) || String(err)) });
+  }
+});
+
 // ---------- listing detail ----------
 
 app.get("/listings/:id", requireAuth, (req, res) => {
