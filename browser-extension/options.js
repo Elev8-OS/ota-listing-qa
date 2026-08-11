@@ -141,10 +141,11 @@ async function fetchScanTargets(baseUrl, apiKey) {
   return data.items || [];
 }
 
-// Die drei Editor-Unterseiten, die pro Listing automatisch besucht werden.
+// Die Editor-Unterseiten, die pro Listing automatisch besucht werden.
 // "description" bekommt in content.js zusätzlich das automatische
 // Durchklicken aller Unterpanels (Listing description/Your property/...).
-const SCAN_SUBPAGES = ["details/photo-tour", "details/description", "details/title"];
+// "amenities" (seit v1.6.0) liefert die aktuell gesetzte Ausstattung.
+const SCAN_SUBPAGES = ["details/photo-tour", "details/description", "details/title", "details/amenities"];
 
 async function runAutoScan() {
   const { baseUrl, apiKey } = await chrome.storage.sync.get(["baseUrl", "apiKey"]);

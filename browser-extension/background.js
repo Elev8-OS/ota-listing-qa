@@ -1,4 +1,4 @@
-// Hintergrundprozess (Service Worker). Drei Aufgaben:
+// Hintergrundprozess (Service Worker). Vier Aufgaben:
 //   1) OTA_QA_TOOL_IMPORT: vom content.js extrahierte Felder per API-Key-
 //      authentifiziertem POST ans QA-Tool schicken.
 //   2) OTA_QA_TOOL_FETCH_WRITEBACK: freigegebene Text-Vorschläge fürs
@@ -7,6 +7,11 @@
 //   3) OTA_QA_TOOL_PHOTO_SCAN: die beim automatischen Durchklicken eines
 //      Raums gesammelten Fotos (Pfad + Bild-URL) ans QA-Tool schicken, das
 //      pro Foto per Claude-Vision einen Alt-Text-Vorschlag erzeugt.
+//   4) OTA_QA_TOOL_FETCH_AMENITY_CATALOG: den serverseitig über alle
+//      gescannten Airbnb-Inserate hinweg gewachsenen Katalog aller bisher
+//      gesehenen Ausstattungsnamen abfragen, damit content.js beim Erfassen
+//      der Amenities-Seite Name- von Beschreibungszeilen zuverlässiger
+//      trennen kann (siehe content.js).
 // Läuft hier (statt im content.js), weil Extension-Hintergrundprozesse mit
 // deklarierten host_permissions nicht den CORS-Beschränkungen der
 // aufrufenden Seite (airbnb.com) unterliegen.
@@ -109,6 +114,29 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
     })();
     return true; // Antwort kommt asynchron (Claude-Vision braucht Zeit pro Foto).
+  }
+
+  if (msg.type === "OTA_QA_TOOL_FETCH_AMENITY_CATALOG") {
+    (async () => {
+      try {
+        const { baseUrl, apiKey } = await getConfig();
+        if (!baseUrl || !apiKey) {
+          sendResponse({ ok: false, error: "Bitte zuerst in den Extension-Optionen QA-Tool-URL und API-Key hinterlegen." });
+          return;
+        }
+        const url = baseUrl.replace(/\/+$/, "") + "/api/browser-import/amenity-catalog";
+        const res = await fetch(url, { headers: { "X-API-Key": apiKey } });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          sendResponse({ ok: false, error: data.error || `HTTP ${res.status}` });
+          return;
+        }
+        sendResponse(data);
+      } catch (err) {
+        sendResponse({ ok: false, error: String((err && err.message) || err) });
+      }
+    })();
+    return true;
   }
 
   return false;
