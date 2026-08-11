@@ -720,6 +720,30 @@ function findChannelByExternalId(platform, external_id) {
   return db.prepare("SELECT * FROM channels WHERE platform = ? AND external_id = ?").get(platform, String(external_id));
 }
 
+// Von der Extension auf .../details/photo-tour/<room-id>/beds abgefragt:
+// welche Zimmer/Betten-Werte stehen für diesen Kanal aktuell im QA-Tool
+// ("rooms"-Tabelle) — das sind die Werte, die auf den Betten-Editor-Seiten
+// vorausgewählt werden sollen (siehe content.js, "Freigegebene Werte hier
+// einfüllen" auf Betten-Seiten). Anders als bei Text-Vorschlägen gibt es für
+// diese Werte bewusst KEIN eigenes Vier-Augen-"proposals"-Freigabe-Objekt —
+// die "rooms"-Tabelle selbst (von eingeloggten QA-Tool-Personen über
+// /rooms/:id/update korrigiert, oder automatisch aus dem Scan befüllt) ist
+// hier bereits die geprüfte Quelle.
+app.get("/api/browser-import/room-targets", requireExtensionApiKey, (req, res) => {
+  const { platform, external_id } = req.query;
+  if (!platform || !external_id) {
+    return res.status(400).json({ ok: false, error: "platform und external_id sind erforderlich." });
+  }
+  const ch = findChannelByExternalId(platform, external_id);
+  if (!ch) {
+    return res.status(404).json({ ok: false, error: "Kein passender Kanal gefunden." });
+  }
+  const rows = db
+    .prepare("SELECT name, room_type, bed_count, declared_bed_type, sleep_capacity FROM rooms WHERE channel_id = ?")
+    .all(ch.id);
+  res.json({ ok: true, items: rows });
+});
+
 // Gleicht die von der Extension auf .../details/sleeping-arrangements
 // gelesenen Räume (siehe lib/browserImport.js, parseSleepingArrangementsRooms)
 // mit der "rooms"-Tabelle ab: bestehendes Zimmer (Zuordnung per Name, Gross-/
