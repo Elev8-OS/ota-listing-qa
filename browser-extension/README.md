@@ -112,7 +112,9 @@ automatisch im Hintergrund durchscannen:
 1. Im QA-Tool bei allen betreffenden Airbnb-Kanälen die **Airbnb Listing-ID**
    hinterlegen (siehe oben).
 2. Extension-Optionen öffnen → Abschnitt "Automatischer Scan (Airbnb)" →
-   **"Scan starten"** klicken.
+   in der Liste "Zu scannende Listings" bei Bedarf einzelne Listings
+   abwählen (Standard: alle ausgewählt; Suchfeld hilft bei vielen Listings)
+   → **"Scan starten"** klicken.
 3. Die Extension öffnet einen eigenen Hintergrund-Tab, navigiert dort selbst
    nacheinander zu "Photo tour", "Description" (inkl. automatischem
    Durchklicken aller Unterpanels: "Listing description"/"Your property"/

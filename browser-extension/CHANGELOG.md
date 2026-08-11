@@ -11,6 +11,17 @@ neu geladene Version tatsächlich aktiv ist (chrome://extensions → Neu laden
 lädt nur das, was aktuell im entpackten Ordner liegt; die Zip muss davor
 dort entpackt worden sein).
 
+## 1.8.0 – 2026-08-11
+
+- Neu: **Listing-Auswahl für den automatischen Scan.** Auf der
+  Extension-Optionsseite lässt sich jetzt bei "Automatischer Scan (Airbnb)"
+  auswählen, welche Listings überhaupt gescannt werden sollen (Checkliste mit
+  Suchfeld, "Alle auswählen"/"Keine auswählen"). Praktisch, wenn nur ein
+  einzelnes Inserat kurz geprüft werden soll, ohne jedes Mal alle zu scannen.
+  Standard bleibt "alle ausgewählt" (unverändertes Verhalten), die Auswahl
+  wird lokal gemerkt; neu hinzukommende Listings werden automatisch
+  mitausgewählt, damit nichts unbemerkt vom Scan ausgeschlossen bleibt.
+
 ## 1.7.0 – 2026-08-11
 
 - Neu: **Zimmer/Betten automatisch aus "Sleeping arrangements" befüllen.**
@@ -90,7 +101,7 @@ dort entpackt worden sein).
 - Fix: Das Status-Widget sass fest unten rechts und verdeckte dort teilweise
   Airbnb-eigene Bedienelemente (z. B. den Chat-Button), die dadurch nicht mehr
   klickbar waren.
-- Neu: Widget per Griff (⠿ oben im Widget) frei verschiebbar — die Position
+- Neu: Widget per Griff (⠠ oben im Widget) frei verschiebbar — die Position
   wird gemerkt (auch über Seitenwechsel/Neuladen hinweg) und beim nächsten
   Besuch automatisch wieder angewendet.
 - Neu: Widget lässt sich per "–"/"+"-Knopf auf ein kleines Icon einklappen,

@@ -47,11 +47,32 @@
     jeweils die Felder aus und sendet sie ans QA-Tool — genau wie beim
     manuellen "An OTA QA-Tool senden", nur ohne dass du selbst navigieren oder
     klicken musst. Es öffnet dafür einen eigenen Hintergrund-Tab und lässt ihn
-    während des Scans in Ruhe. Diese Seite muss dafür offen bleiben.
+    während des Scans in Ruhe. Diese Seite muss dafür offen bleiben. Unten
+    lässt sich auswählen, welche Listings dabei überhaupt gescannt werden
+    sollen — praktisch, wenn du nur ein einzelnes Listing kurz prüfen willst,
+    ohne jedes Mal alle zu scannen.
     <b>Booking.com</b> lässt sich aus technischen Gründen (Login-Sperre bei
     Skript-Navigation im Extranet) nicht automatisieren — dort bitte weiterhin
     manuell pro Unterkunft "An OTA QA-Tool senden" klicken.
   </p>
+
+  <div id="scan-target-controls" style="margin-top:14px;">
+    <label style="margin-top:0;">Zu scannende Listings</label>
+    <p class="hint" style="margin-top:2px;">
+      Standardmässig sind alle Listings ausgewählt. Abwählen, was gerade
+      nicht gescannt werden soll — die Auswahl wird gemerkt (auch über einen
+      Neustart der Extension hinweg).
+    </p>
+    <input id="scan-target-filter" type="text" placeholder="Listing suchen …" />
+    <div style="margin-top:8px;">
+      <button id="scan-target-select-all" class="secondary" type="button">Alle auswählen</button>
+      <button id="scan-target-select-none" class="secondary" type="button">Keine auswählen</button>
+      <button id="scan-target-refresh" class="secondary" type="button">Liste aktualisieren</button>
+    </div>
+    <div id="scan-target-list" style="margin-top:8px; max-height:240px; overflow-y:auto; border:1px solid #ccc; border-radius:6px; padding:8px; font-size:13px;">
+      <span class="hint">Bitte oben zuerst Basis-URL/API-Key speichern, dann lädt die Liste automatisch.</span>
+    </div>
+  </div>
 
   <button id="scan-start">Scan starten</button>
   <button id="scan-stop" class="secondary" disabled>Scan abbrechen</button>

@@ -9,6 +9,9 @@ async function save() {
   const apiKey = document.getElementById("apiKey").value.trim();
   await chrome.storage.sync.set({ baseUrl, apiKey });
   document.getElementById("status").textContent = "Gespeichert.";
+  // Listing-Auswahl direkt nachladen, falls Basis-URL/API-Key gerade erst
+  // eingetragen wurden (vorher zeigte die Liste nur einen Hinweis).
+  if (typeof loadScanTargetChecklist === "function") loadScanTargetChecklist();
 }
 
 async function test() {
@@ -141,6 +144,113 @@ async function fetchScanTargets(baseUrl, apiKey) {
   return data.items || [];
 }
 
+// ---------- Listing-Auswahl für den Scan ----------
+// Standardmässig werden weiterhin ALLE Airbnb-Kanäle mit hinterlegter
+// Listing-ID gescannt (unverändertes Verhalten). Wer nur einzelne Listings
+// prüfen will, kann hier abwählen, was nicht gescannt werden soll — die
+// Auswahl wird lokal gemerkt (chrome.storage.local, pro externer Listing-ID),
+// damit sie auch nach einem Neustart der Extension erhalten bleibt. Neue,
+// noch nie gesehene Listings werden automatisch als ausgewählt vorbelegt,
+// damit ein frisch hinzugefügter Kanal nicht versehentlich unbemerkt vom
+// Scan ausgeschlossen bleibt.
+let lastLoadedScanTargets = [];
+
+async function getSavedScanSelection() {
+  const { scanSelectedExternalIds } = await chrome.storage.local.get(["scanSelectedExternalIds"]);
+  return Array.isArray(scanSelectedExternalIds) ? scanSelectedExternalIds : null;
+}
+
+async function saveScanSelection(externalIds) {
+  await chrome.storage.local.set({ scanSelectedExternalIds: externalIds });
+}
+
+function renderScanTargetList(targets, selectedIds) {
+  const container = document.getElementById("scan-target-list");
+  container.innerHTML = "";
+  if (!targets.length) {
+    container.innerHTML =
+      '<span class="hint">Keine Airbnb-Kanäle mit hinterlegter Listing-ID gefunden.</span>';
+    return;
+  }
+  const selectedSet = new Set(selectedIds);
+  targets.forEach((t) => {
+    const row = document.createElement("label");
+    row.style.cssText = "display:flex;align-items:center;gap:8px;font-weight:400;margin-top:6px;cursor:pointer;";
+    row.dataset.listingName = (t.listing_name || "").toLowerCase();
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.style.width = "auto";
+    checkbox.dataset.externalId = t.external_id;
+    checkbox.checked = selectedSet.has(String(t.external_id));
+    checkbox.addEventListener("change", persistScanSelectionFromDom);
+    const text = document.createElement("span");
+    text.textContent = t.listing_name || `Listing ${t.external_id}`;
+    row.appendChild(checkbox);
+    row.appendChild(text);
+    container.appendChild(row);
+  });
+}
+
+function persistScanSelectionFromDom() {
+  const checkboxes = document.querySelectorAll("#scan-target-list input[type=checkbox]");
+  const selected = Array.from(checkboxes)
+    .filter((cb) => cb.checked)
+    .map((cb) => cb.dataset.externalId);
+  saveScanSelection(selected);
+}
+
+async function loadScanTargetChecklist() {
+  const container = document.getElementById("scan-target-list");
+  const { baseUrl, apiKey } = await chrome.storage.sync.get(["baseUrl", "apiKey"]);
+  if (!baseUrl || !apiKey) {
+    container.innerHTML =
+      '<span class="hint">Bitte oben zuerst Basis-URL/API-Key speichern, dann lädt die Liste automatisch.</span>';
+    return;
+  }
+  container.innerHTML = '<span class="hint">Lade Listings …</span>';
+  try {
+    const targets = await fetchScanTargets(baseUrl, apiKey);
+    lastLoadedScanTargets = targets;
+    let selection = await getSavedScanSelection();
+    if (selection === null) {
+      // Noch nie gespeichert: alle vorbelegen (unverändertes Standardverhalten).
+      selection = targets.map((t) => String(t.external_id));
+      await saveScanSelection(selection);
+    } else {
+      // Neu hinzugekommene Listings (seit der letzten gespeicherten Auswahl)
+      // ebenfalls automatisch vorbelegen, damit sie nicht unbemerkt fehlen.
+      const known = new Set(selection);
+      const newOnes = targets.map((t) => String(t.external_id)).filter((id) => !known.has(id));
+      if (newOnes.length) {
+        selection = selection.concat(newOnes);
+        await saveScanSelection(selection);
+      }
+    }
+    renderScanTargetList(targets, selection);
+  } catch (e) {
+    container.innerHTML = '<span class="hint">Fehler beim Laden der Listings: ' + e.message + "</span>";
+  }
+}
+
+document.getElementById("scan-target-select-all").addEventListener("click", () => {
+  document.querySelectorAll("#scan-target-list input[type=checkbox]").forEach((cb) => (cb.checked = true));
+  persistScanSelectionFromDom();
+});
+document.getElementById("scan-target-select-none").addEventListener("click", () => {
+  document.querySelectorAll("#scan-target-list input[type=checkbox]").forEach((cb) => (cb.checked = false));
+  persistScanSelectionFromDom();
+});
+document.getElementById("scan-target-refresh").addEventListener("click", () => {
+  loadScanTargetChecklist();
+});
+document.getElementById("scan-target-filter").addEventListener("input", (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll("#scan-target-list label").forEach((row) => {
+    row.style.display = !q || row.dataset.listingName.includes(q) ? "flex" : "none";
+  });
+});
+loadScanTargetChecklist();
+
 // Die Editor-Unterseiten, die pro Listing automatisch besucht werden.
 // "description" bekommt in content.js zusätzlich das automatische
 // Durchklicken aller Unterpanels (Listing description/Your property/...).
@@ -188,6 +298,28 @@ async function runAutoScan() {
     document.getElementById("scan-start").disabled = false;
     document.getElementById("scan-stop").disabled = true;
     return;
+  }
+
+  // Nur die oben ausgewählten Listings scannen (siehe "Zu scannende
+  // Listings"-Liste) — Standard ist "alle", das lässt sich also weglassen,
+  // wenn man nie eine Auswahl getroffen/verändert hat.
+  const allCount = targets.length;
+  const selection = await getSavedScanSelection();
+  if (selection !== null) {
+    const selectedSet = new Set(selection);
+    targets = targets.filter((t) => selectedSet.has(String(t.external_id)));
+  }
+  if (!targets.length) {
+    scanLog(
+      `Keine Listings ausgewählt (0 von ${allCount}) — bitte oben in "Zu scannende Listings" mindestens ein Listing auswählen, dann erneut starten.`
+    );
+    scanState.running = false;
+    document.getElementById("scan-start").disabled = false;
+    document.getElementById("scan-stop").disabled = true;
+    return;
+  }
+  if (targets.length < allCount) {
+    scanLog(`${targets.length} von ${allCount} Airbnb-Inserat(en) ausgewählt (siehe Listen-Auswahl oben).`);
   }
 
   scanLog(`${targets.length} Airbnb-Inserat(e) gefunden. Scan startet in einem eigenen Hintergrund-Tab …`);
