@@ -10,6 +10,7 @@ const db = require("./db");
 const { computeFindings } = require("./lib/checks");
 const { applyBrowserImport } = require("./lib/browserImport");
 const { mergeTextFields, parseTextFields, fieldValue, fieldMaxLength } = require("./lib/textFields");
+const { parseAmenities, parseCatalog, mergeAmenityCatalog, possibleAdditions } = require("./lib/amenities");
 const { extractAirbnbListingId } = require("./lib/airbnbUrl");
 const { rewriteText } = require("./lib/aiRewrite");
 const { describeImage } = require("./lib/aiVision");
@@ -520,6 +521,8 @@ app.get("/listings/:id", requireAuth, (req, res) => {
     }
     return ch;
   });
+  const amenityCatalogRow = db.prepare("SELECT value FROM settings WHERE key = 'airbnb_amenity_catalog'").get();
+  const amenityCatalog = parseCatalog(amenityCatalogRow && amenityCatalogRow.value);
   const channels = channelsRaw.map((ch) => {
     const rooms = db.prepare("SELECT * FROM rooms WHERE channel_id = ? ORDER BY sort_order, id").all(ch.id);
     const findings = computeFindings(ch, rooms);
@@ -541,7 +544,12 @@ app.get("/listings/:id", requireAuth, (req, res) => {
     const proposedTargets = new Set(
       proposals.filter((p) => p.target_field_id).map((p) => p.target_path + "::" + p.target_field_id)
     );
-    return { ...ch, rooms, findings, proposals, textFieldsByPath, proposedTargets };
+    // Ausstattung (nur Airbnb): aktuell gesetzte Merkmale + was laut dem über
+    // alle gescannten Airbnb-Kanäle gewachsenen Katalog zusätzlich möglich
+    // wäre (siehe lib/amenities.js und der amenity-catalog-Endpunkt).
+    const amenities = ch.platform === "airbnb" ? parseAmenities(ch.amenities) : [];
+    const possibleAmenities = ch.platform === "airbnb" ? possibleAdditions(amenityCatalog, amenities) : [];
+    return { ...ch, rooms, findings, proposals, textFieldsByPath, proposedTargets, amenities, possibleAmenities };
   });
   const role = req.currentUser.role;
   res.render("listing", {
@@ -736,7 +744,28 @@ app.post("/api/browser-import", requireExtensionApiKey, (req, res) => {
     newTextFieldsJson = mergeTextFields(ch.text_fields, fields.page, fields.rawTextInputs);
     textFieldsCount = fields.rawTextInputs.length;
   }
-  const ok = result.ok || textFieldsCount > 0;
+  // Airbnb-"Amenities" (Ausstattung): fields.amenities = [{name, description}],
+  // von der Extension auf .../details/amenities gelesen (siehe content.js).
+  // Speichert die aktuelle Liste beim Kanal UND führt neu gesehene Namen in
+  // den globalen, über alle Airbnb-Kanäle wachsenden Katalog zusammen (siehe
+  // lib/amenities.js) — Grundlage für "was wäre zusätzlich möglich" im
+  // QA-Tool sowie für den amenity-catalog-Endpunkt unten.
+  let amenitiesCount = 0;
+  let newAmenitiesJson = ch.amenities;
+  if (fields && Array.isArray(fields.amenities) && fields.amenities.length) {
+    newAmenitiesJson = JSON.stringify(fields.amenities);
+    amenitiesCount = fields.amenities.length;
+    const existingCatalogJson = db.prepare("SELECT value FROM settings WHERE key = 'airbnb_amenity_catalog'").get();
+    const mergedCatalogJson = mergeAmenityCatalog(
+      existingCatalogJson && existingCatalogJson.value,
+      fields.amenities.map((a) => a && a.name).filter(Boolean)
+    );
+    db.prepare(
+      "INSERT INTO settings (key, value) VALUES ('airbnb_amenity_catalog', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    ).run(mergedCatalogJson);
+  }
+
+  const ok = result.ok || textFieldsCount > 0 || amenitiesCount > 0;
 
   db.prepare(
     `UPDATE channels SET
@@ -747,6 +776,7 @@ app.post("/api/browser-import", requireExtensionApiKey, (req, res) => {
        live_sleeping_text = COALESCE(?, live_sleeping_text),
        live_source = CASE WHEN ? IS NOT NULL THEN 'extension' ELSE live_source END,
        text_fields = ?,
+       amenities = ?,
        last_imported_at = datetime('now'),
        import_note = ?,
        last_extension_version = COALESCE(?, last_extension_version)
@@ -759,11 +789,26 @@ app.post("/api/browser-import", requireExtensionApiKey, (req, res) => {
     result.liveText,
     result.liveText,
     newTextFieldsJson,
-    textFieldsCount > 0 ? `${textFieldsCount} Textfeld(er) von "${fields.page}" gelesen. ${result.note}` : result.note,
+    newAmenitiesJson,
+    amenitiesCount > 0
+      ? `${amenitiesCount} Ausstattungsmerkmal(e) gelesen. ${result.note}`
+      : textFieldsCount > 0
+        ? `${textFieldsCount} Textfeld(er) von "${fields.page}" gelesen. ${result.note}`
+        : result.note,
     req.body && req.body.extension_version ? String(req.body.extension_version) : null,
     ch.id
   );
-  res.json({ ok, channel_id: ch.id, listing_id: ch.listing_id, note: result.note, textFieldsCount });
+  res.json({ ok, channel_id: ch.id, listing_id: ch.listing_id, note: result.note, textFieldsCount, amenitiesCount });
+});
+
+// Vom content.js abgefragt (vor dem Erfassen der Amenities-Seite) UND von der
+// QA-Tool-Ansicht selbst genutzt: der über alle gescannten Airbnb-Kanäle
+// gewachsene Katalog aller jemals gesehenen Ausstattungsnamen (siehe
+// lib/amenities.js — Airbnb liefert nirgends eine vollständige Liste "aller
+// möglichen" Merkmale, deshalb wächst dieser Katalog aus echten Scans).
+app.get("/api/browser-import/amenity-catalog", requireExtensionApiKey, (req, res) => {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'airbnb_amenity_catalog'").get();
+  res.json({ ok: true, items: parseCatalog(row && row.value) });
 });
 
 // Die Extension klickt auf der Fotorundgang-Seite eines Raums automatisch
