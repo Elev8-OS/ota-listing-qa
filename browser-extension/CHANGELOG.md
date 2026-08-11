@@ -11,6 +11,24 @@ neu geladene Version tatsächlich aktiv ist (chrome://extensions → Neu laden
 lädt nur das, was aktuell im entpackten Ordner liegt; die Zip muss davor
 dort entpackt worden sein).
 
+## 1.9.0 – 2026-08-11
+
+- Neu: **Betten-Werte aus dem QA-Tool nach Airbnb zurückschreiben.** Auf
+  Airbnbs Betten-Editor-Seite eines Zimmers
+  (`.../details/photo-tour/<Zimmer>/beds` — Stepper für Single/Double/Queen/
+  King/Small double/Bunk bed/Sofa bed/Couch/...) füllt derselbe Button wie
+  beim Text-Rückschreiben ("Freigegebene ... hier einfüllen") jetzt den im
+  QA-Tool hinterlegten Bettentyp/-anzahl für dieses Zimmer automatisch aus
+  (per Klick auf Airbnbs eigene +/− Stepper, geänderte Zeilen rot markiert).
+  Wie überall in dieser Extension gilt dabei: **es wird nie automatisch
+  Airbnbs "Save" geklickt** — das bleibt bewusst ein manueller, letzter
+  Prüfschritt der Person, bevor die Änderung auf dem echten, öffentlichen
+  Listing landet. Funktioniert nur für die 6 im QA-Tool eindeutig
+  hinterlegbaren Bettentypen (Einzelbett/Doppelbett/Kingsize-Doppelbett/
+  Queensize-Doppelbett/Etagenbett/Schlafcouch) — bei "Sonstiges" oder leerem
+  Wert bleibt die Seite unverändert (keine sichere Zuordnung zu einem der
+  14 Airbnb-Bettentypen möglich), mit entsprechendem Hinweis im Status.
+
 ## 1.8.0 – 2026-08-11
 
 - Neu: **Listing-Auswahl für den automatischen Scan.** Auf der

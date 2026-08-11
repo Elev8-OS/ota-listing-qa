@@ -86,6 +86,21 @@ Es wird also nie automatisch etwas in Airbnb gespeichert oder abgeschickt —
 nur gelesen (Schritt 1) bzw. ins Formularfeld eingetragen, ohne zu speichern
 (Schritt 4).
 
+## Betten-Werte zurückschreiben
+
+Derselbe Button funktioniert seit v1.9.0 auch auf Airbnbs Betten-Editor-Seite
+eines einzelnen Zimmers (`.../details/photo-tour/<Zimmer>/beds`, erreichbar
+über "Sleeping arrangements" auf der Zimmer-Fotoseite): ein Klick auf
+**"Hinterlegte Betten-Werte hier einfüllen"** liest den im QA-Tool für dieses
+Zimmer hinterlegten Bettentyp/-anzahl (Zimmername muss mit Airbnb
+übereinstimmen) und stellt Airbnbs eigene +/− Stepper entsprechend ein
+(geänderte Zeilen rot markiert) — ebenfalls **ohne** dabei auf Airbnbs
+"Save" zu klicken, das bleibt dein letzter Prüfschritt. Funktioniert nur für
+die 6 im QA-Tool eindeutig hinterlegbaren Bettentypen (Einzelbett/
+Doppelbett/Kingsize-Doppelbett/Queensize-Doppelbett/Etagenbett/Schlafcouch);
+bei "Sonstiges" oder leerem Wert bleibt die Seite unverändert, mit
+entsprechendem Hinweis im Status.
+
 ## Ausstattung (Amenities)
 
 Die Extension liest auf der Editor-Unterseite "Amenities" die vollständige,

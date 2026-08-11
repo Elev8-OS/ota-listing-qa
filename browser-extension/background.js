@@ -12,6 +12,10 @@
 //      gesehenen Ausstattungsnamen abfragen, damit content.js beim Erfassen
 //      der Amenities-Seite Name- von Beschreibungszeilen zuverlässiger
 //      trennen kann (siehe content.js).
+//   5) OTA_QA_TOOL_FETCH_ROOM_TARGETS: die aktuellen Zimmer/Betten-Werte aus
+//      der QA-Tool-"rooms"-Tabelle für den aktuellen Kanal abfragen, damit
+//      content.js sie auf Airbnbs Betten-Editor-Seite
+//      (.../details/photo-tour/<room-id>/beds) vorausfüllen kann.
 // Läuft hier (statt im content.js), weil Extension-Hintergrundprozesse mit
 // deklarierten host_permissions nicht den CORS-Beschränkungen der
 // aufrufenden Seite (airbnb.com) unterliegen.
@@ -70,6 +74,30 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           path: msg.path || "",
         });
         const url = baseUrl.replace(/\/+$/, "") + "/api/browser-import/pending-writeback?" + params.toString();
+        const res = await fetch(url, { headers: { "X-API-Key": apiKey } });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          sendResponse({ ok: false, error: data.error || `HTTP ${res.status}` });
+          return;
+        }
+        sendResponse(data);
+      } catch (err) {
+        sendResponse({ ok: false, error: String((err && err.message) || err) });
+      }
+    })();
+    return true;
+  }
+
+  if (msg.type === "OTA_QA_TOOL_FETCH_ROOM_TARGETS") {
+    (async () => {
+      try {
+        const { baseUrl, apiKey } = await getConfig();
+        if (!baseUrl || !apiKey) {
+          sendResponse({ ok: false, error: "Bitte zuerst in den Extension-Optionen QA-Tool-URL und API-Key hinterlegen." });
+          return;
+        }
+        const params = new URLSearchParams({ platform: msg.platform, external_id: msg.external_id });
+        const url = baseUrl.replace(/\/+$/, "") + "/api/browser-import/room-targets?" + params.toString();
         const res = await fetch(url, { headers: { "X-API-Key": apiKey } });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
