@@ -79,6 +79,29 @@
   </div>
   <% } %>
 
+  <% if (ch.platform === 'airbnb' && (ch.amenities || []).length) { %>
+  <h3>Ausstattung (Amenities)</h3>
+  <p class="muted">
+    Von der Browser-Extension auf der Editor-Unterseite „Amenities“ gelesen — Airbnb zeigt dort nur das bereits
+    Gesetzte, keine Liste des Möglichen. „Zusätzlich möglich“ ist deshalb der über <strong>alle</strong> bisher
+    gescannten Airbnb-Inserate gewachsene Katalog abzüglich der hier bereits gesetzten Merkmale — je mehr Inserate
+    gescannt sind, desto vollständiger wird er von selbst. Nichts wird automatisch in Airbnb geändert.
+  </p>
+  <div class="amenity-list">
+    <% ch.amenities.forEach(function(a) { %>
+      <span class="amenity-badge" title="<%= a.description || '' %>"><%= a.name %></span>
+    <% }) %>
+  </div>
+  <% if ((ch.possibleAmenities || []).length) { %>
+  <p class="muted" style="margin-top:10px;margin-bottom:2px">Zusätzlich möglich (laut anderen gescannten Inseraten, hier aber nicht gesetzt):</p>
+  <div class="amenity-list">
+    <% ch.possibleAmenities.forEach(function(name) { %>
+      <span class="amenity-badge possible"><%= name %></span>
+    <% }) %>
+  </div>
+  <% } %>
+  <% } %>
+
   <% const textPaths = Object.keys(ch.textFieldsByPath || {}); %>
   <% if (ch.platform === 'airbnb' && textPaths.length) { %>
   <h3>Erfasste Texte aus dem Airbnb-Editor ("alle Texte im Inserat")</h3>
