@@ -168,4 +168,18 @@ try {
   // Index ist optional (kleine Datenmenge) - Fehler hier nicht fatal.
 }
 
+// Migration: Airbnb-"Amenities" (Ausstattung). Die Extension liest auf der
+// Editor-Unterseite .../details/amenities die vollständige, bereits gesetzte
+// Liste ("You've added these to your listing so far") mit Name + Kurz-
+// beschreibung pro Merkmal aus. amenities speichert das pro Kanal als JSON:
+// [{name, description}]. Der GLOBALE Katalog aller jemals gesehenen Namen
+// (für "was wäre zusätzlich möglich") liegt in der bestehenden settings-
+// Tabelle unter dem Key "airbnb_amenity_catalog" (siehe lib/amenities.js) --
+// dafür ist keine eigene Spalte/Tabelle nötig.
+try {
+  db.exec("ALTER TABLE channels ADD COLUMN amenities TEXT");
+} catch (e) {
+  if (!/duplicate column/i.test(e.message)) throw e;
+}
+
 module.exports = db;
