@@ -145,7 +145,17 @@ async function fetchScanTargets(baseUrl, apiKey) {
 // "description" bekommt in content.js zusätzlich das automatische
 // Durchklicken aller Unterpanels (Listing description/Your property/...).
 // "amenities" (seit v1.6.0) liefert die aktuell gesetzte Ausstattung.
-const SCAN_SUBPAGES = ["details/photo-tour", "details/description", "details/title", "details/amenities"];
+// "sleeping-arrangements" (seit v1.7.0) liefert pro Schlafzimmer/Wohnbereich
+// die dort tatsächlich hinterlegte Bettenkonfiguration (inkl. Räumen ohne
+// Bett) — daraus baut der Server die Zimmer-Tabelle für den Konsistenz-Check
+// automatisch statt sie von Hand nachpflegen zu müssen.
+const SCAN_SUBPAGES = [
+  "details/photo-tour",
+  "details/description",
+  "details/title",
+  "details/amenities",
+  "details/sleeping-arrangements",
+];
 
 async function runAutoScan() {
   const { baseUrl, apiKey } = await chrome.storage.sync.get(["baseUrl", "apiKey"]);

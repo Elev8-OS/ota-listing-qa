@@ -11,6 +11,24 @@ neu geladene Version tatsächlich aktiv ist (chrome://extensions → Neu laden
 lädt nur das, was aktuell im entpackten Ordner liegt; die Zip muss davor
 dort entpackt worden sein).
 
+## 1.7.0 – 2026-08-11
+
+- Neu: **Zimmer/Betten automatisch aus "Sleeping arrangements" befüllen.**
+  Die Extension liest beim Hintergrund-Scan zusätzlich die Editor-Unterseite
+  "Sleeping arrangements" (Add sleeping arrangements-Widget) — dort listet
+  Airbnb IMMER alle Schlafzimmer + den Wohnbereich auf, inklusive noch leerer
+  Räume ("Add details"), zusammen mit der dort tatsächlich hinterlegten
+  Bettenkonfiguration (z. B. "1 queen bed", "1 sofa bed"). Das QA-Tool
+  gleicht das automatisch mit der Zimmer-Tabelle ab (neues Zimmer wird
+  angelegt, bestehendes per Name aktualisiert) — der Konsistenz-Check
+  Kopfzeile vs. Fotorundgang/Sleeping arrangements funktioniert damit ohne
+  manuelles Nacherfassen jedes einzelnen Zimmers.
+- Fix/Hinweis: Beim Klicken zwischen einzelnen Zimmern zeigte die Seite kurz
+  noch die Betten-Angabe des vorher geöffneten Zimmers (React-Re-Render nicht
+  abgeschlossen) — deshalb liest diese neue Erfassung bewusst die
+  konsolidierte "Add sleeping arrangements"-Übersicht auf einen Blick statt
+  einzelne Zimmer nacheinander anzuklicken.
+
 ## 1.6.0 – 2026-08-11
 
 - Neu: **Ausstattung (Amenities) erfassen.** Die Extension liest auf der
@@ -72,7 +90,7 @@ dort entpackt worden sein).
 - Fix: Das Status-Widget sass fest unten rechts und verdeckte dort teilweise
   Airbnb-eigene Bedienelemente (z. B. den Chat-Button), die dadurch nicht mehr
   klickbar waren.
-- Neu: Widget per Griff (⠠ oben im Widget) frei verschiebbar — die Position
+- Neu: Widget per Griff (⠿ oben im Widget) frei verschiebbar — die Position
   wird gemerkt (auch über Seitenwechsel/Neuladen hinweg) und beim nächsten
   Besuch automatisch wieder angewendet.
 - Neu: Widget lässt sich per "–"/"+"-Knopf auf ein kleines Icon einklappen,
