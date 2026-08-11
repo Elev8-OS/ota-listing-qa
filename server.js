@@ -8,7 +8,7 @@ const archiver = require("archiver");
 
 const db = require("./db");
 const { computeFindings } = require("./lib/checks");
-const { applyBrowserImport } = require("./lib/browserImport");
+const { applyBrowserImport, parseSleepingArrangementsRooms } = require("./lib/browserImport");
 const { mergeTextFields, parseTextFields, fieldValue, fieldMaxLength } = require("./lib/textFields");
 const { parseAmenities, parseCatalog, mergeAmenityCatalog, possibleAdditions } = require("./lib/amenities");
 const { extractAirbnbListingId } = require("./lib/airbnbUrl");
@@ -720,6 +720,37 @@ function findChannelByExternalId(platform, external_id) {
   return db.prepare("SELECT * FROM channels WHERE platform = ? AND external_id = ?").get(platform, String(external_id));
 }
 
+// Gleicht die von der Extension auf .../details/sleeping-arrangements
+// gelesenen Räume (siehe lib/browserImport.js, parseSleepingArrangementsRooms)
+// mit der "rooms"-Tabelle ab: bestehendes Zimmer (Zuordnung per Name, Gross-/
+// Kleinschreibung egal) wird aktualisiert, neues Zimmer wird angelegt. So
+// befüllt sich die Zimmer-Tabelle, gegen die computeFindings() rechnet, bei
+// jedem automatischen Scan von selbst, statt von Hand nachgepflegt werden zu
+// müssen — macht den Konsistenz-Check (Kopfzeile vs. Fotorundgang/Sleeping
+// arrangements) erst tatsächlich nutzbar. photo_count/photo_bed_type eines
+// bereits bestehenden Zimmers werden bewusst nicht angerührt (die kommen
+// weiterhin aus der Fotorundgang-Erfassung bzw. manueller Foto-Prüfung).
+function syncRoomsFromScan(channelId, parsedRooms) {
+  if (!parsedRooms || !parsedRooms.length) return 0;
+  const existing = db.prepare("SELECT * FROM rooms WHERE channel_id = ?").all(channelId);
+  let count = 0;
+  for (const r of parsedRooms) {
+    const match = existing.find((e) => e.name && e.name.trim().toLowerCase() === r.name.trim().toLowerCase());
+    if (match) {
+      db.prepare(
+        `UPDATE rooms SET room_type=?, bed_count=?, sleep_capacity=?, declared_bed_type=?, hat_schlafgelegenheit=?, in_schlafgelegenheiten=1 WHERE id=?`
+      ).run(r.room_type, r.bed_count, r.sleep_capacity, r.declared_bed_type, r.hat_schlafgelegenheit, match.id);
+    } else {
+      db.prepare(
+        `INSERT INTO rooms (channel_id, name, room_type, photo_count, hat_schlafgelegenheit, bed_count, sleep_capacity, declared_bed_type, photo_bed_type, in_schlafgelegenheiten)
+         VALUES (?, ?, ?, 0, ?, ?, ?, ?, '', 1)`
+      ).run(channelId, r.name, r.room_type, r.hat_schlafgelegenheit, r.bed_count, r.sleep_capacity, r.declared_bed_type);
+    }
+    count++;
+  }
+  return count;
+}
+
 app.post("/api/browser-import", requireExtensionApiKey, (req, res) => {
   const { platform, external_id, fields } = req.body || {};
   if (!platform || !external_id) {
@@ -765,7 +796,15 @@ app.post("/api/browser-import", requireExtensionApiKey, (req, res) => {
     ).run(mergedCatalogJson);
   }
 
-  const ok = result.ok || textFieldsCount > 0 || amenitiesCount > 0;
+  // Zimmer/Betten aus "Sleeping arrangements" (v1.7.0): fields.sleepingArrangementsRooms
+  // = [{room, bedsText}], von der Extension auf .../details/sleeping-arrangements
+  // gelesen (siehe content.js). Befüllt/aktualisiert die Zimmer-Tabelle direkt.
+  let roomsCount = 0;
+  if (fields && Array.isArray(fields.sleepingArrangementsRooms) && fields.sleepingArrangementsRooms.length) {
+    roomsCount = syncRoomsFromScan(ch.id, parseSleepingArrangementsRooms(fields.sleepingArrangementsRooms));
+  }
+
+  const ok = result.ok || textFieldsCount > 0 || amenitiesCount > 0 || roomsCount > 0;
 
   db.prepare(
     `UPDATE channels SET
@@ -790,15 +829,17 @@ app.post("/api/browser-import", requireExtensionApiKey, (req, res) => {
     result.liveText,
     newTextFieldsJson,
     newAmenitiesJson,
-    amenitiesCount > 0
-      ? `${amenitiesCount} Ausstattungsmerkmal(e) gelesen. ${result.note}`
-      : textFieldsCount > 0
-        ? `${textFieldsCount} Textfeld(er) von "${fields.page}" gelesen. ${result.note}`
-        : result.note,
+    roomsCount > 0
+      ? `${roomsCount} Zimmer aus "Sleeping arrangements" abgeglichen. ${result.note}`
+      : amenitiesCount > 0
+        ? `${amenitiesCount} Ausstattungsmerkmal(e) gelesen. ${result.note}`
+        : textFieldsCount > 0
+          ? `${textFieldsCount} Textfeld(er) von "${fields.page}" gelesen. ${result.note}`
+          : result.note,
     req.body && req.body.extension_version ? String(req.body.extension_version) : null,
     ch.id
   );
-  res.json({ ok, channel_id: ch.id, listing_id: ch.listing_id, note: result.note, textFieldsCount, amenitiesCount });
+  res.json({ ok, channel_id: ch.id, listing_id: ch.listing_id, note: result.note, textFieldsCount, amenitiesCount, roomsCount });
 });
 
 // Vom content.js abgefragt (vor dem Erfassen der Amenities-Seite) UND von der
