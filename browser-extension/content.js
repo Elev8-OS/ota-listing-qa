@@ -389,6 +389,118 @@
     return out;
   }
 
+  // ---------- Betten-Rückschreiben (v1.9.0) ----------
+  // Auf .../details/photo-tour/<room-id>/beds zeigt Airbnb einen Stepper pro
+  // Bettentyp (Single/Double/Queen/King/Small double/Bunk bed/Sofa bed/Couch/
+  // Floor mattress/Air mattress/Crib/Toddler bed/Hammock/Water bed) mit
+  // einem eigenen "Save"-Button für genau dieses Zimmer. Live im DOM
+  // geprüft: jede Zeile hat einen Button mit aria-label "subtract", einen
+  // mit aria-label "add", und einen <span>, dessen sichtbarer Text exakt
+  // "<Zahl> <Bettenart>" lautet (daneben ein zweiter, nur für Screenreader
+  // gedachter Span mit demselben Text — deshalb Suche nach dem Text-Muster
+  // statt nach fester Position). Wie überall in dieser Extension kein
+  // Ersatz für ein festes DOM-Schema — ändert Airbnb die Struktur, liefert
+  // die Erkennung einfach keine Zeilen (siehe README "Grenzen").
+  function isBedsPage() {
+    return /\/details\/photo-tour\/[^/]+\/beds\/?$/.test(location.pathname);
+  }
+
+  // Auf dieser Unterseite gibt es (anders als auf der Raum-Fotoseite selbst)
+  // KEINE sichtbare Raumnamen-Überschrift im DOM — Airbnb zeigt den Raum nur
+  // im <title> ("Sleeping arrangements - Bedroom 2 - Airbnb"). Deshalb hier
+  // bewusst über document.title statt über getRoomLabel() (das für diese
+  // Unterseite leer bliebe).
+  function getRoomLabelFromBedsPageTitle() {
+    const m = document.title.match(/^Sleeping arrangements - (.+?) - Airbnb$/);
+    return m ? m[1].trim() : null;
+  }
+
+  function getBedFormRows() {
+    const buttons = [...document.querySelectorAll("button")];
+    const rows = [];
+    buttons.forEach((btn) => {
+      if ((btn.getAttribute("aria-label") || "").trim().toLowerCase() !== "subtract") return;
+      const container = btn.parentElement;
+      if (!container) return;
+      const addBtn = [...container.querySelectorAll("button")].find(
+        (b) => (b.getAttribute("aria-label") || "").trim().toLowerCase() === "add"
+      );
+      if (!addBtn) return;
+      const labelSpan = [...container.querySelectorAll("span")].find((s) =>
+        /^\d+\s+.+$/.test((s.textContent || "").trim())
+      );
+      if (!labelSpan) return;
+      const m = labelSpan.textContent.trim().match(/^(\d+)\s+(.+)$/);
+      if (!m) return;
+      rows.push({ count: Number(m[1]), label: m[2].trim(), subtractBtn: btn, addBtn, container });
+    });
+    return rows;
+  }
+
+  // Klickt "times"-mal auf denselben Stepper-Button, mit kurzer Pause
+  // zwischen den Klicks (React braucht etwas Zeit, um den Zähler-State pro
+  // Klick zu übernehmen — ohne Pause gingen bei schnellen Tests live
+  // vereinzelt Klicks "verloren").
+  function clickTimes(btn, times) {
+    return new Promise((resolve) => {
+      let i = 0;
+      function step() {
+        if (i >= times) return resolve();
+        btn.click();
+        i++;
+        setTimeout(step, 150);
+      }
+      step();
+    });
+  }
+
+  // Unser QA-Tool kennt pro Zimmer nur EINEN Bettentyp (Dropdown mit 6
+  // eindeutigen Werten + "Sonstiges"/leer, siehe views/listing.ejs) — Airbnb
+  // dagegen 14 Bettenarten. Nur die 6 eindeutig zuordenbaren schreiben wir
+  // zurück; bei "Sonstiges" oder leerem Wert wüssten wir nicht, welche der
+  // übrigen 8 Airbnb-Bettenarten gemeint ist — dann lieber gar nichts
+  // anfassen, statt das falsche Bett auszuwählen.
+  const QA_TO_AIRBNB_BED_LABEL = {
+    Einzelbett: "Single",
+    Doppelbett: "Double",
+    "Kingsize-Doppelbett": "King",
+    "Queensize-Doppelbett": "Queen",
+    Etagenbett: "Bunk bed",
+    Schlafcouch: "Sofa bed",
+  };
+
+  // Setzt auf der Betten-Seite genau EIN Zimmer auf den im QA-Tool
+  // hinterlegten Bettentyp/-anzahl: die passende Zeile auf die Zielzahl,
+  // alle anderen Zeilen auf 0 (falls Airbnb aktuell einen anderen/
+  // zusätzlichen Bettentyp zeigt als im QA-Tool hinterlegt). Klickt dabei
+  // NIE auf "Save" — das bleibt bewusst ein manueller Schritt in Airbnb
+  // (siehe README, gleiches Prinzip wie beim Text-Rückschreiben).
+  async function fillBedsRoom(room) {
+    const rows = getBedFormRows();
+    if (!rows.length) return { changed: 0, error: "Keine Betten-Zeilen auf dieser Seite gefunden." };
+    const targetLabel = QA_TO_AIRBNB_BED_LABEL[room.declared_bed_type];
+    if (!targetLabel && Number(room.bed_count) > 0) {
+      return {
+        changed: 0,
+        error:
+          `Bettentyp "${room.declared_bed_type || "–"}" im QA-Tool ist nicht eindeutig einem Airbnb-Bettentyp ` +
+          `zuordenbar — bitte hier manuell in Airbnb setzen.`,
+      };
+    }
+    let changed = 0;
+    for (const row of rows) {
+      const target = row.label === targetLabel ? Number(room.bed_count) || 0 : 0;
+      const delta = target - row.count;
+      if (delta === 0) continue;
+      changed++;
+      row.container.style.outline = "2px solid #e0004d";
+      row.container.style.borderRadius = "8px";
+      if (delta > 0) await clickTimes(row.addBtn, delta);
+      else await clickTimes(row.subtractBtn, -delta);
+    }
+    return { changed };
+  }
+
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (!msg || msg.type !== "OTA_QA_TOOL_AUTO_SCAN_PAGE") return false;
     (async () => {
@@ -691,6 +803,7 @@
 
       const fillBtn = document.createElement("button");
       fillBtn.type = "button";
+      fillBtn.id = "ota-qa-tool-fill-btn";
       fillBtn.textContent = "Freigegebene Texte hier einfüllen";
       fillBtn.style.cssText =
         "background:#fff;color:#e0004d;border:2px solid #e0004d;padding:8px 16px;border-radius:24px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2)";
@@ -699,6 +812,41 @@
         const listingId = extractListingId();
         if (!listingId) {
           setStatus("Konnte keine Listing-ID aus der URL lesen.");
+          return;
+        }
+        if (isBedsPage()) {
+          const roomName = getRoomLabelFromBedsPageTitle();
+          if (!roomName) {
+            setStatus("Konnte den Raumnamen auf dieser Betten-Seite nicht lesen (Seitentitel unerwartet).");
+            return;
+          }
+          setStatus(`Suche hinterlegte Betten-Werte für "${roomName}" im QA-Tool …`);
+          chrome.runtime.sendMessage(
+            { type: "OTA_QA_TOOL_FETCH_ROOM_TARGETS", platform: "airbnb", external_id: listingId },
+            (response) => {
+              if (!response || !response.ok) {
+                setStatus("Fehler: " + (response && response.error ? response.error : "keine Antwort"));
+                return;
+              }
+              const items = response.items || [];
+              const room = items.find((r) => (r.name || "").trim().toLowerCase() === roomName.toLowerCase());
+              if (!room) {
+                setStatus(`Kein Zimmer "${roomName}" im QA-Tool gefunden (Zimmername muss exakt übereinstimmen).`);
+                return;
+              }
+              fillBedsRoom(room).then((result) => {
+                if (result.error) {
+                  setStatus(result.error);
+                } else if (result.changed === 0) {
+                  setStatus(`"${roomName}" stimmt bereits mit dem QA-Tool überein — keine Änderung nötig.`);
+                } else {
+                  setStatus(
+                    `${result.changed} Bettenart(en) für "${roomName}" angepasst (rot markiert) — bitte prüfen und in Airbnb selbst "Save" klicken. Danach im QA-Tool ggf. den Scan erneut laufen lassen, damit der Konsistenz-Check den neuen Stand sieht.`
+                  );
+                }
+              });
+            }
+          );
           return;
         }
         setStatus("Suche freigegebene Texte für diese Seite …");
@@ -857,6 +1005,14 @@
     const photoScanBtn = document.getElementById("ota-qa-tool-photo-scan-btn");
     if (photoScanBtn) {
       photoScanBtn.style.display = isRoomPhotoGridPage() ? "inline-block" : "none";
+    }
+
+    // Beschriftung des "Freigegebene ... hier einfüllen"-Buttons an die
+    // aktuelle Seite anpassen — auf Betten-Seiten füllt derselbe Button
+    // Bettenwerte statt Texte ein (siehe fillBtn-Klick-Handler oben).
+    const fillBtnEl = document.getElementById("ota-qa-tool-fill-btn");
+    if (fillBtnEl) {
+      fillBtnEl.textContent = isBedsPage() ? "Hinterlegte Betten-Werte hier einfüllen" : "Freigegebene Texte hier einfüllen";
     }
   }
 
