@@ -11,6 +11,22 @@ neu geladene Version tatsächlich aktiv ist (chrome://extensions → Neu laden
 lädt nur das, was aktuell im entpackten Ordner liegt; die Zip muss davor
 dort entpackt worden sein).
 
+## 1.6.0 – 2026-08-11
+
+- Neu: **Ausstattung (Amenities) erfassen.** Die Extension liest auf der
+  Editor-Unterseite "Amenities" die vollständige, bereits gesetzte Liste
+  (Name + Kurzbeschreibung je Merkmal) — sowohl beim manuellen "An OTA
+  QA-Tool senden" als auch automatisch beim Hintergrund-Scan (jetzt zusätzlich
+  zu Photo tour/Description/Title). Airbnb zeigt im Editor selbst nirgends
+  eine Liste "aller möglichen" Merkmale (nur das bereits Gesetzte, mit einem
+  Minus-Symbol zum Entfernen) — das QA-Tool baut diesen Katalog deshalb aus
+  echten Scans selbst auf: jeder neu gesehene Name (über alle gescannten
+  Airbnb-Inserate hinweg) landet in einem wachsenden, gemeinsamen Katalog.
+  Pro Inserat zeigt das QA-Tool jetzt "Ausstattung" (aktuell gesetzt) und
+  "Zusätzlich möglich" (Katalog abzüglich der hier bereits gesetzten
+  Merkmale) an. Wie überall: nur gelesen, nichts wird automatisch in Airbnb
+  geändert.
+
 ## 1.5.0 – 2026-08-10
 
 - Neu: **Automatischer Hintergrund-Scan für Airbnb** (Extension-Optionen →
@@ -56,7 +72,7 @@ dort entpackt worden sein).
 - Fix: Das Status-Widget sass fest unten rechts und verdeckte dort teilweise
   Airbnb-eigene Bedienelemente (z. B. den Chat-Button), die dadurch nicht mehr
   klickbar waren.
-- Neu: Widget per Griff (⠿ oben im Widget) frei verschiebbar — die Position
+- Neu: Widget per Griff (⠠ oben im Widget) frei verschiebbar — die Position
   wird gemerkt (auch über Seitenwechsel/Neuladen hinweg) und beim nächsten
   Besuch automatisch wieder angewendet.
 - Neu: Widget lässt sich per "–"/"+"-Knopf auf ein kleines Icon einklappen,

@@ -86,6 +86,23 @@ Es wird also nie automatisch etwas in Airbnb gespeichert oder abgeschickt —
 nur gelesen (Schritt 1) bzw. ins Formularfeld eingetragen, ohne zu speichern
 (Schritt 4).
 
+## Ausstattung (Amenities)
+
+Die Extension liest auf der Editor-Unterseite "Amenities" die vollständige,
+bereits gesetzte Liste (Name + Kurzbeschreibung je Merkmal, z. B. "Air
+conditioning – Split type ductless system.") — beim manuellen "An OTA
+QA-Tool senden" genauso wie beim automatischen Hintergrund-Scan (siehe unten).
+Airbnb zeigt im Editor selbst nirgends eine Liste "aller möglichen"
+Ausstattungsmerkmale unabhängig von einem konkreten Inserat (nur das bereits
+Gesetzte, mit einem Minus-Symbol zum Entfernen, live geprüft). Das QA-Tool
+baut diesen Katalog deshalb aus echten Scans selbst auf: jeder neu gesehene
+Name landet in einem gemeinsamen, über alle gescannten Airbnb-Inserate
+wachsenden Katalog. Im QA-Tool wird pro Inserat sowohl die aktuell gesetzte
+Ausstattung als auch "Zusätzlich möglich" (Katalog abzüglich des bereits
+Gesetzten) angezeigt — je mehr Inserate gescannt sind, desto vollständiger
+wird der Katalog von selbst. Auch hier: nur gelesen, nichts wird automatisch
+in Airbnb verändert.
+
 ## Automatischer Hintergrund-Scan (nur Airbnb)
 
 Statt für jedes Listing selbst zu navigieren und "An OTA QA-Tool senden" zu
@@ -99,9 +116,9 @@ automatisch im Hintergrund durchscannen:
 3. Die Extension öffnet einen eigenen Hintergrund-Tab, navigiert dort selbst
    nacheinander zu "Photo tour", "Description" (inkl. automatischem
    Durchklicken aller Unterpanels: "Listing description"/"Your property"/
-   "Guest access"/"Interaction with guests"/"Other details to note") und
-   "Title" jedes Listings, liest die Felder aus und sendet sie ans QA-Tool —
-   identisch zum manuellen "An OTA QA-Tool senden", nur automatisiert.
+   "Guest access"/"Interaction with guests"/"Other details to note"), "Title"
+   und "Amenities" jedes Listings, liest die Felder aus und sendet sie ans
+   QA-Tool — identisch zum manuellen "An OTA QA-Tool senden", nur automatisiert.
 4. Der Live-Log auf der Optionsseite zeigt den Fortschritt; "Scan abbrechen"
    stoppt nach dem aktuell laufenden Listing. Die Optionsseite muss während
    des Scans offen bleiben (der Scan läuft dort, nicht im Hintergrundprozess,
