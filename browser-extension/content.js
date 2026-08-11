@@ -218,6 +218,119 @@
     return collected;
   }
 
+  // ---------- Ausstattung ("Amenities") — v1.6.0 ----------
+  // Airbnb zeigt auf .../details/amenities die vollständige, bereits gesetzte
+  // Liste ("You've added these to your listing so far") als Name+Kurz-
+  // beschreibung-Paare in reinem Fliesstext (kein festes DOM-Schema, wie beim
+  // Rest dieser Extraktion) — live geprüft: das zugehörige "Edit"-Panel zeigt
+  // ausschliesslich das bereits Gesetzte mit einem Minus-Symbol zum
+  // Entfernen, KEINE Checkliste der noch nicht gewählten, "möglichen"
+  // Merkmale. Airbnb bietet also nirgends im Editor eine Liste "aller
+  // möglichen" Ausstattungsmerkmale unabhängig von einem konkreten Inserat.
+  // Das QA-Tool baut diesen Katalog deshalb selbst auf: der Server sammelt
+  // über ALLE gescannten Airbnb-Inserate hinweg jeden bisher gesehenen Namen
+  // (siehe lib/amenities.js) und zeigt pro Inserat die Differenz an — je mehr
+  // Inserate gescannt sind, desto vollständiger wird der Katalog von selbst.
+  //
+  // Zum sicheren Trennen von "Name"- und "Beschreibungs"-Zeilen im Fliesstext
+  // dient eine Startliste bekannter Namen (live aus einem echten Inserat
+  // ausgelesen) plus eine Heuristik für noch unbekannte Namen: Airbnbs
+  // Namen sind immer kurz, enthalten nie einen Aufzählungspunkt/Punkt am Ende
+  // und sind nie in Satzform ("A device that...") — Beschreibungen sind fast
+  // immer genau das Gegenteil.
+  const KNOWN_AMENITY_NAMES = [
+    "Air conditioning", "Backyard", "BBQ grill", "Bed linens", "Board games", "Books and reading material",
+    "Carbon monoxide alarm", "Cleaning available during stay", "Cleaning products", "Clothing storage",
+    "Coffee maker", "Conditioner", "Crib", "Dedicated workspace", "Dining table", "Dishes and silverware",
+    "Dishwasher", "Dryer", "Elevator", "Essentials", "Ethernet connection", "EV charger", "Fire extinguisher",
+    "First aid kit", "Free parking on premises", "Hair dryer", "Hangers", "Heating", "Hot water",
+    "Hot water kettle", "Iron", "Kitchen", "Laundromat nearby", "Long term stays allowed",
+    "Luggage dropoff allowed", "Outdoor dining area", "Outdoor furniture", "Oven", "Paid parking off premises",
+    "Patio or balcony", "Private entrance", "Private living room", "Refrigerator", "Room-darkening shades",
+    "Shampoo", "Shower gel", "Single level home", "Smoke alarm", "Stove", "TV", "Washer", "Wifi",
+  ];
+
+  function looksLikeAmenityName(line, knownNames) {
+    if (knownNames.has(line)) return true;
+    if (/\.\s*$/.test(line)) return false; // "Cotton.", "Central heating." — Attribut-Notizen enden auf einen Punkt, Namen nie.
+    if (line.length > 34) return false; // Beschreibungen sind praktisch immer länger als Airbnbs kurze Namen.
+    if (line.includes("•")) return false; // Attribut-Aufzählungen ("Miele • Induction • ...").
+    if (/^(A|An)\s[a-z]/.test(line)) return false; // "A device that...", "An entrance that..." — Satzform.
+    if (/,/.test(line) && /\band\b/i.test(line)) return false; // "Plates, bowls, cups, ... and other utensils".
+    return true;
+  }
+
+  // Der isolierte Container um die "Amenities"-Überschrift (nicht das ganze
+  // document.body.innerText, das auch die linke Navigationsspalte enthält) —
+  // per Höhenwanderung von der Überschrift aus gefunden, weil Airbnbs
+  // CSS-Klassen automatisch generiert und damit als Selektor unbrauchbar sind
+  // (gleiches Problem/gleiche Lösung wie bei getOpenPanelLabel() oben).
+  function findAmenitiesContainer() {
+    const headings = [...document.querySelectorAll("h1, h2, h3, h4")].filter((h) => h.textContent.trim() === "Amenities");
+    for (const h of headings) {
+      let el = h;
+      for (let i = 0; i < 6 && el; i++) {
+        if (el.innerText && el.innerText.length > 200) return el;
+        el = el.parentElement;
+      }
+    }
+    return null;
+  }
+
+  // Steuer-Beschriftungen, die vor der eigentlichen Liste stehen (Überschrift
+  // "Amenities", der "Edit"-Link) — MÜSSEN vor dem Namen/Beschreibung-Split
+  // entfernt werden: "Edit" alleine sieht sonst selbst wie ein gültiger, sehr
+  // kurzer Name aus und würde den folgenden Einleitungssatz ("You've added
+  // these to your listing so far.") fälschlich als dessen Beschreibung
+  // einziehen und damit die gesamte restliche Zuordnung verschieben (live
+  // gefunden beim Testen dieser Extraktion).
+  const AMENITY_CONTROL_LABELS = new Set(["Amenities", "Edit", "Done"]);
+
+  function extractAmenities(extraKnownNames) {
+    const container = findAmenitiesContainer();
+    if (!container) return [];
+    const known = new Set(KNOWN_AMENITY_NAMES.concat(extraKnownNames || []));
+    const lines = container.innerText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l && !AMENITY_CONTROL_LABELS.has(l));
+    // Vor dem ersten echten Merkmal steht nur noch der Einleitungssatz
+    // "You've added these to your listing so far." — bis zum ersten
+    // erkannten Namen überspringen statt fix zu zählen, damit kleine
+    // Textveränderungen bei Airbnb nichts kaputt machen.
+    const startIndex = lines.findIndex((l) => looksLikeAmenityName(l, known));
+    if (startIndex === -1) return [];
+    const items = [];
+    for (let i = startIndex; i < lines.length; i++) {
+      const line = lines[i];
+      if (!looksLikeAmenityName(line, known)) continue; // Sicherheitsnetz, sollte durch die Logik unten nicht vorkommen.
+      const next = lines[i + 1];
+      let description = null;
+      if (next && !looksLikeAmenityName(next, known)) {
+        description = next;
+        i++;
+      }
+      items.push({ name: line, description });
+    }
+    return items;
+  }
+
+  // Vor dem Erfassen der Amenities einmal den serverseitig gewachsenen
+  // Katalog (siehe oben) holen, damit auch bei DIESEM Listing neu
+  // dazugekommene, dem hartkodierten KNOWN_AMENITY_NAMES noch unbekannte
+  // Namen zuverlässig als "Name" statt als Beschreibung erkannt werden.
+  function fetchAmenityCatalog() {
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage({ type: "OTA_QA_TOOL_FETCH_AMENITY_CATALOG" }, (response) => {
+          resolve(response && response.ok && Array.isArray(response.items) ? response.items : []);
+        });
+      } catch (e) {
+        resolve([]);
+      }
+    });
+  }
+
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (!msg || msg.type !== "OTA_QA_TOOL_AUTO_SCAN_PAGE") return false;
     (async () => {
@@ -232,6 +345,10 @@
       const hasDescriptionPanels = DESCRIPTION_PANEL_LABELS.some((label) => findClickableByExactText(label));
       const rawTextInputs = hasDescriptionPanels ? await autoScanDescriptionPanels() : extractGenericTextFields();
       const fields = { ...extractPhotoTourFields(), page: location.pathname, rawTextInputs };
+      if (findAmenitiesContainer()) {
+        const catalog = await fetchAmenityCatalog();
+        fields.amenities = extractAmenities(catalog);
+      }
       sendResponse({ ok: true, listingId, fields });
     })();
     return true; // Antwort kommt asynchron (Panel-Klicks brauchen Zeit).
@@ -410,7 +527,7 @@
 
       const dragHandle = document.createElement("div");
       dragHandle.title = "Ziehen, um das Widget zu verschieben";
-      dragHandle.textContent = "⠿";
+      dragHandle.textContent = "⠠";
       dragHandle.style.cssText =
         "background:#111;color:#fff;width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:grab;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.25);user-select:none";
 
@@ -470,7 +587,7 @@
       sendBtn.style.cssText =
         "background:#e0004d;color:#fff;border:none;padding:10px 18px;border-radius:24px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25)";
 
-      sendBtn.addEventListener("click", () => {
+      sendBtn.addEventListener("click", async () => {
         const listingId = extractListingId();
         if (!listingId) {
           setStatus("Konnte keine Listing-ID aus der URL lesen. Bitte auf der Editor-Seite eines Listings bleiben.");
@@ -482,6 +599,10 @@
           page: location.pathname,
           rawTextInputs: extractGenericTextFields(),
         };
+        if (findAmenitiesContainer()) {
+          const catalog = await fetchAmenityCatalog();
+          fields.amenities = extractAmenities(catalog);
+        }
         chrome.runtime.sendMessage(
           { type: "OTA_QA_TOOL_IMPORT", platform: "airbnb", external_id: listingId, fields },
           (response) => {
