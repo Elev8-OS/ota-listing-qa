@@ -297,7 +297,7 @@
     // Vor dem ersten echten Merkmal steht nur noch der Einleitungssatz
     // "You've added these to your listing so far." — bis zum ersten
     // erkannten Namen überspringen statt fix zu zählen, damit kleine
-    // Textveränderungen bei Airbnb nichts kaputt machen.
+    // Textänderungen bei Airbnb nichts kaputt machen.
     const startIndex = lines.findIndex((l) => looksLikeAmenityName(l, known));
     if (startIndex === -1) return [];
     const items = [];
@@ -331,6 +331,64 @@
     });
   }
 
+  // ---------- Zimmer/Betten aus der Seite "Sleeping arrangements" — v1.7.0 ----------
+  // Ausgangslage: die bisherige Erfassung (extractPhotoTourFields, oben) liest
+  // auf der Fotorundgang-Übersichtsseite nur Zimmernamen + Fotoanzahl, sowie
+  // – als reinen Fliesstext-Hinweis, NICHT strukturiert – einen "Sleeping
+  // arrangements"-Textblock, der dort aber unvollständig ist (Räume ohne
+  // Bett fehlen ganz). Airbnb hat dafür eine eigene Editor-Unterseite
+  // (.../details/sleeping-arrangements), die IMMER alle schlafraum-fähigen
+  // Räume (Schlafzimmer + Wohnbereich) auflistet, inkl. der noch leeren
+  // ("Add details") — live geprüft an einem echten Inserat mit 2 Schlafzimmern
+  // + Wohnbereich mit Sofa-Bett. WICHTIG dabei live gefunden: ohne Wartezeit
+  // nach jedem Klick zeigte die Seite kurz noch die Betten-Angabe des vorher
+  // geöffneten Zimmers (React-Re-Render nicht abgeschlossen) — deshalb bei
+  // jeder Automatisierung, die zwischen Zimmern klickt, immer erst kurz
+  // warten, bevor der Text gelesen wird (gleiches Prinzip wie bei
+  // autoScanDescriptionPanels oben).
+  //
+  // Diese Seite selbst braucht dafür gar keine Einzel-Zimmer-Klicks: das
+  // Widget "Add sleeping arrangements" zeigt bereits alle Räume mit ihrer
+  // jeweiligen Betten-Angabe (oder "Add details", falls noch keine gesetzt)
+  // auf einen Blick.
+  function isSleepingStatusLine(line) {
+    return /^\d+\s.*\bbeds?\b/i.test(line) || /^add details$/i.test(line);
+  }
+
+  function findSleepingArrangementsContainer() {
+    const headings = [...document.querySelectorAll("h1, h2, h3, h4")].filter(
+      (h) => h.textContent.trim() === "Add sleeping arrangements"
+    );
+    for (const h of headings) {
+      let el = h;
+      for (let i = 0; i < 6 && el; i++) {
+        if (el.innerText && el.innerText.length > 60) return el;
+        el = el.parentElement;
+      }
+    }
+    return null;
+  }
+
+  // Liefert pro Raum { room, bedsText } — bedsText ist null, wenn Airbnb dort
+  // noch "Add details" zeigt (kein Bett hinterlegt). Funktioniert unabhängig
+  // von Zimmeranzahl/-namen: paart einfach jede Nicht-Status-Zeile mit der
+  // direkt folgenden Status-Zeile (Zahl+"bed(s)" oder "Add details") — genau
+  // dieselbe Heuristik wie beim bestehenden (unvollständigen) Sleeping-
+  // arrangements-Block in extractPhotoTourFields.
+  function extractSleepingArrangementsRooms() {
+    const container = findSleepingArrangementsContainer();
+    if (!container) return [];
+    const lines = container.innerText.split("\n").map((l) => l.trim()).filter(Boolean);
+    const out = [];
+    for (let i = 0; i < lines.length - 1; i++) {
+      if (!isSleepingStatusLine(lines[i]) && isSleepingStatusLine(lines[i + 1])) {
+        out.push({ room: lines[i], bedsText: /^add details$/i.test(lines[i + 1]) ? null : lines[i + 1] });
+        i++;
+      }
+    }
+    return out;
+  }
+
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (!msg || msg.type !== "OTA_QA_TOOL_AUTO_SCAN_PAGE") return false;
     (async () => {
@@ -348,6 +406,9 @@
       if (findAmenitiesContainer()) {
         const catalog = await fetchAmenityCatalog();
         fields.amenities = extractAmenities(catalog);
+      }
+      if (findSleepingArrangementsContainer()) {
+        fields.sleepingArrangementsRooms = extractSleepingArrangementsRooms();
       }
       sendResponse({ ok: true, listingId, fields });
     })();
@@ -527,7 +588,7 @@
 
       const dragHandle = document.createElement("div");
       dragHandle.title = "Ziehen, um das Widget zu verschieben";
-      dragHandle.textContent = "⠠";
+      dragHandle.textContent = "⠿";
       dragHandle.style.cssText =
         "background:#111;color:#fff;width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:grab;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.25);user-select:none";
 
@@ -602,6 +663,9 @@
         if (findAmenitiesContainer()) {
           const catalog = await fetchAmenityCatalog();
           fields.amenities = extractAmenities(catalog);
+        }
+        if (findSleepingArrangementsContainer()) {
+          fields.sleepingArrangementsRooms = extractSleepingArrangementsRooms();
         }
         chrome.runtime.sendMessage(
           { type: "OTA_QA_TOOL_IMPORT", platform: "airbnb", external_id: listingId, fields },
